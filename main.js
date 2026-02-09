@@ -56,30 +56,42 @@ viewport.addEventListener("wheel", e => {
 /* =========================
    TOKENS
 ========================= */
-function createTokenElement(id, data) {
-  let el = document.getElementById(id);
+const tokenElements = {}; // guarda referência de tokens para não recriar
+
+function createOrUpdateToken(id, data) {
+  let el = tokenElements[id];
   if(!el){
     el = document.createElement("div");
     el.className = "token";
     el.id = id;
     world.appendChild(el);
+    tokenElements[id] = el;
 
-    let dragging=false, dx, dy;
+    // Dragging
+    let dragging=false, dx=0, dy=0;
+    el.addEventListener("mousedown", e => {
+      e.stopPropagation();
+      dragging=true;
+      dx = e.offsetX;
+      dy = e.offsetY;
+    });
 
-    el.addEventListener("mousedown", e => { e.stopPropagation(); dragging=true; dx=e.offsetX; dy=e.offsetY; });
     window.addEventListener("mousemove", e => {
       if(!dragging) return;
       const x = (e.clientX - offsetX)/scale - dx;
       const y = (e.clientY - offsetY)/scale - dy;
       el.style.left = x + "px";
       el.style.top  = y + "px";
-      tokensRef.child(id).update({x,y});
+      // atualiza Firebase apenas se o token foi movido
+      tokensRef.child(id).update({x, y});
     });
-    window.addEventListener("mouseup", ()=>dragging=false);
 
+    window.addEventListener("mouseup", () => dragging=false);
+
+    // Clicar abre ficha
     el.addEventListener("click", e => {
       e.stopPropagation();
-      sheet.style.display="block";
+      sheet.style.display = "block";
       sheet.innerHTML = `
         <strong>Ficha Token</strong><br>
         ID: ${id}<br>
@@ -89,6 +101,7 @@ function createTokenElement(id, data) {
     });
   }
 
+  // Atualiza posição
   el.style.left = data.x + "px";
   el.style.top = data.y + "px";
 }
@@ -96,9 +109,21 @@ function createTokenElement(id, data) {
 /* =========================
    FIREBASE SYNC
 ========================= */
-tokensRef.on("value", snap => {
-  world.querySelectorAll(".token").forEach(t=>t.remove());
-  snap.forEach(child => createTokenElement(child.key, child.val()));
+tokensRef.on("value", snapshot => {
+  const tokens = snapshot.val() || {};
+  // cria ou atualiza tokens existentes
+  Object.keys(tokens).forEach(id => {
+    createOrUpdateToken(id, tokens[id]);
+  });
+
+  // remove tokens que não existem mais
+  Object.keys(tokenElements).forEach(id => {
+    if(!tokens[id]){
+      const el = tokenElements[id];
+      if(el) el.remove();
+      delete tokenElements[id];
+    }
+  });
 });
 
 /* =========================
@@ -108,4 +133,3 @@ document.getElementById("createToken").onclick = () => {
   const id = "token_" + Date.now();
   tokensRef.child(id).set({ x: 300, y: 300 });
 };
-
