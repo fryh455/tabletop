@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Login — Tabletop Multiplayer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="login-container">
+    <h2>Login / Registro</h2>
+    <div>
+      <input id="email" placeholder="Email" type="email" />
+      <input id="password" placeholder="Senha" type="password" />
+      <select id="role">
+        <option value="player">Player</option>
+        <option value="mestre">Mestre</option>
+      </select>
+      <button id="btnRegister">Registrar</button>
+      <button id="btnLogin">Entrar</button>
+    </div>
+    <div id="login-msg"></div>
+  </div>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+  <script>
+    /* Firebase Config */
+    firebase.initializeApp({
+      apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
+      authDomain: "marionetes-do-destino.firebaseapp.com",
+      databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
+      projectId: "marionetes-do-destino"
+    });
+
+    const auth = firebase.auth();
+    const db = firebase.database();
+
+    const emailInput = document.getElementById("email");
+    const passInput  = document.getElementById("password");
+    const roleSelect = document.getElementById("role");
+    const msgDiv     = document.getElementById("login-msg");
+
+    document.getElementById("btnRegister").onclick = async ()=>{
+      const email = emailInput.value.trim();
+      const pass = passInput.value;
+      const role = roleSelect.value;
+      if(!email || !pass){ msgDiv.textContent = "Preencha todos os campos"; return; }
+      try{
+        const cred = await auth.createUserWithEmailAndPassword(email, pass);
+        db.ref("users/"+cred.user.uid).set({ email, role });
+        msgDiv.textContent = "Conta criada! Redirecionando...";
+        setTimeout(()=>location.href="tabletop.html",500);
+      }catch(err){ msgDiv.textContent = "Erro: "+err.message; }
+    };
+
+    document.getElementById("btnLogin").onclick = async ()=>{
+      const email = emailInput.value.trim();
+      const pass = passInput.value;
+      if(!email || !pass){ msgDiv.textContent = "Preencha todos os campos"; return; }
+      try{
+        await auth.signInWithEmailAndPassword(email, pass);
+        msgDiv.textContent = "Logado! Redirecionando...";
+        setTimeout(()=>location.href="tabletop.html",500);
+      }catch(err){ msgDiv.textContent = "Erro: "+err.message; }
+    };
+
+    // check if already logged in
+    auth.onAuthStateChanged(user=>{
+      if(user) location.href="tabletop.html";
+    });
+  </script>
+</body>
+</html>
