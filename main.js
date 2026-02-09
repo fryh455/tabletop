@@ -1,13 +1,12 @@
 /* =========================
    FIREBASE CONFIG
 ========================= */
-const firebaseConfig = {
+firebase.initializeApp({
   apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
   authDomain: "marionetes-do-destino.firebaseapp.com",
   databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
   projectId: "marionetes-do-destino"
-};
-firebase.initializeApp(firebaseConfig);
+});
 const db = firebase.database();
 const tokensRef = db.ref("tokens");
 
@@ -19,7 +18,6 @@ const world = document.getElementById("world");
 const sheet = document.getElementById("sheet");
 
 let scale = 1, offsetX = 0, offsetY = 0;
-
 function updateTransform() {
   world.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
 }
@@ -49,49 +47,46 @@ window.addEventListener("mousemove", e => {
 viewport.addEventListener("wheel", e => {
   e.preventDefault();
   const delta = e.deltaY < 0 ? 1.1 : 0.9;
-  scale = Math.min(Math.max(scale*delta, 0.3),3);
+  scale = Math.min(Math.max(scale*delta,0.3),3);
   updateTransform();
-}, {passive:false});
+},{passive:false});
 
 /* =========================
    TOKENS
 ========================= */
-const tokenElements = {}; // guarda referência de tokens para não recriar
+const tokenElements = {};
 
-function createOrUpdateToken(id, data) {
+function createOrUpdateToken(id, data){
   let el = tokenElements[id];
   if(!el){
     el = document.createElement("div");
-    el.className = "token";
-    el.id = id;
+    el.className="token";
+    el.id=id;
     world.appendChild(el);
     tokenElements[id] = el;
 
-    // Dragging
+    // Drag
     let dragging=false, dx=0, dy=0;
     el.addEventListener("mousedown", e => {
       e.stopPropagation();
       dragging=true;
-      dx = e.offsetX;
-      dy = e.offsetY;
+      dx=e.offsetX;
+      dy=e.offsetY;
     });
-
     window.addEventListener("mousemove", e => {
       if(!dragging) return;
       const x = (e.clientX - offsetX)/scale - dx;
       const y = (e.clientY - offsetY)/scale - dy;
       el.style.left = x + "px";
-      el.style.top  = y + "px";
-      // atualiza Firebase apenas se o token foi movido
-      tokensRef.child(id).update({x, y});
+      el.style.top = y + "px";
+      tokensRef.child(id).update({x,y});
     });
+    window.addEventListener("mouseup", ()=>dragging=false);
 
-    window.addEventListener("mouseup", () => dragging=false);
-
-    // Clicar abre ficha
-    el.addEventListener("click", e => {
+    // Click abre ficha
+    el.addEventListener("click", e=>{
       e.stopPropagation();
-      sheet.style.display = "block";
+      sheet.style.display="block";
       sheet.innerHTML = `
         <strong>Ficha Token</strong><br>
         ID: ${id}<br>
@@ -101,7 +96,6 @@ function createOrUpdateToken(id, data) {
     });
   }
 
-  // Atualiza posição
   el.style.left = data.x + "px";
   el.style.top = data.y + "px";
 }
@@ -109,18 +103,12 @@ function createOrUpdateToken(id, data) {
 /* =========================
    FIREBASE SYNC
 ========================= */
-tokensRef.on("value", snapshot => {
-  const tokens = snapshot.val() || {};
-  // cria ou atualiza tokens existentes
-  Object.keys(tokens).forEach(id => {
-    createOrUpdateToken(id, tokens[id]);
-  });
-
-  // remove tokens que não existem mais
-  Object.keys(tokenElements).forEach(id => {
+tokensRef.on("value", snap=>{
+  const tokens = snap.val()||{};
+  Object.keys(tokens).forEach(id=> createOrUpdateToken(id, tokens[id]));
+  Object.keys(tokenElements).forEach(id=>{
     if(!tokens[id]){
-      const el = tokenElements[id];
-      if(el) el.remove();
+      tokenElements[id].remove();
       delete tokenElements[id];
     }
   });
@@ -129,7 +117,7 @@ tokensRef.on("value", snapshot => {
 /* =========================
    CREATE TOKEN
 ========================= */
-document.getElementById("createToken").onclick = () => {
-  const id = "token_" + Date.now();
-  tokensRef.child(id).set({ x: 300, y: 300 });
+document.getElementById("createToken").onclick = ()=>{
+  const id = "token_"+Date.now();
+  tokensRef.child(id).set({x:300,y:300});
 };
