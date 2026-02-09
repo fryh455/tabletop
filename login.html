@@ -1,75 +1,83 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8">
-<title>Login — Tabletop Multiplayer</title>
-<link rel="stylesheet" href="style.css">
+<meta charset="utf-8" />
+<title>Login — Tabletop</title>
+<link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="login-container">
-    <h2>Login / Registro</h2>
-    <div>
+  <div id="loginBox">
+    <h2>Entrar / Registrar</h2>
+
+    <div class="form-row">
       <input id="email" placeholder="Email" type="email" />
+    </div>
+    <div class="form-row">
       <input id="password" placeholder="Senha" type="password" />
+    </div>
+    <div class="form-row">
       <select id="role">
         <option value="player">Player</option>
         <option value="mestre">Mestre</option>
       </select>
+    </div>
+
+    <div class="form-row">
       <button id="btnRegister">Registrar</button>
       <button id="btnLogin">Entrar</button>
     </div>
-    <div id="login-msg"></div>
+
+    <div id="loginMsg"></div>
   </div>
 
-  <!-- Firebase -->
+  <!-- Firebase (compat) -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
   <script>
-    /* Firebase Config */
-    firebase.initializeApp({
-      apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
-      authDomain: "marionetes-do-destino.firebaseapp.com",
-      databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
-      projectId: "marionetes-do-destino"
-    });
+  /* ==== Config (mesma do projeto) ==== */
+  firebase.initializeApp({
+    apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
+    authDomain: "marionetes-do-destino.firebaseapp.com",
+    databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
+    projectId: "marionetes-do-destino"
+  });
 
-    const auth = firebase.auth();
-    const db = firebase.database();
+  const auth = firebase.auth();
+  const db = firebase.database();
+  const usersRef = db.ref("users");
 
-    const emailInput = document.getElementById("email");
-    const passInput  = document.getElementById("password");
-    const roleSelect = document.getElementById("role");
-    const msgDiv     = document.getElementById("login-msg");
+  const email = document.getElementById("email");
+  const password = document.getElementById("password");
+  const role = document.getElementById("role");
+  const msg = document.getElementById("loginMsg");
 
-    document.getElementById("btnRegister").onclick = async ()=>{
-      const email = emailInput.value.trim();
-      const pass = passInput.value;
-      const role = roleSelect.value;
-      if(!email || !pass){ msgDiv.textContent = "Preencha todos os campos"; return; }
-      try{
-        const cred = await auth.createUserWithEmailAndPassword(email, pass);
-        db.ref("users/"+cred.user.uid).set({ email, role });
-        msgDiv.textContent = "Conta criada! Redirecionando...";
-        setTimeout(()=>location.href="tabletop.html",500);
-      }catch(err){ msgDiv.textContent = "Erro: "+err.message; }
-    };
+  document.getElementById("btnRegister").onclick = async () => {
+    msg.textContent = "";
+    if(!email.value || !password.value){ msg.textContent = "Preencha email e senha"; return; }
+    try{
+      const cred = await auth.createUserWithEmailAndPassword(email.value, password.value);
+      await usersRef.child(cred.user.uid).set({ email: email.value, role: role.value });
+      msg.textContent = "Registrado. Redirecionando...";
+      setTimeout(()=> location.href = "index.html", 600);
+    }catch(err){ msg.textContent = "Erro: " + err.message; }
+  };
 
-    document.getElementById("btnLogin").onclick = async ()=>{
-      const email = emailInput.value.trim();
-      const pass = passInput.value;
-      if(!email || !pass){ msgDiv.textContent = "Preencha todos os campos"; return; }
-      try{
-        await auth.signInWithEmailAndPassword(email, pass);
-        msgDiv.textContent = "Logado! Redirecionando...";
-        setTimeout(()=>location.href="tabletop.html",500);
-      }catch(err){ msgDiv.textContent = "Erro: "+err.message; }
-    };
+  document.getElementById("btnLogin").onclick = async () => {
+    msg.textContent = "";
+    if(!email.value || !password.value){ msg.textContent = "Preencha email e senha"; return; }
+    try{
+      await auth.signInWithEmailAndPassword(email.value, password.value);
+      msg.textContent = "Logado. Redirecionando...";
+      setTimeout(()=> location.href = "index.html", 400);
+    }catch(err){ msg.textContent = "Erro: " + err.message; }
+  };
 
-    // check if already logged in
-    auth.onAuthStateChanged(user=>{
-      if(user) location.href="tabletop.html";
-    });
+  // redirect if already logged
+  auth.onAuthStateChanged(user=>{
+    if(user) location.href = "index.html";
+  });
   </script>
 </body>
 </html>
