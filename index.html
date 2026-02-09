@@ -1,34 +1,229 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="utf-8" />
-<title>Tabletop — Index</title>
-<link rel="stylesheet" href="style.css" />
+<meta charset="UTF-8" />
+<title>Tabletop Multiplayer</title>
+<style>
+html, body {
+  margin: 0; padding: 0; overflow: hidden; height: 100%;
+  background: #111; color: white; font-family: sans-serif;
+}
+
+#ui {
+  position: fixed; top: 10px; right: 10px; z-index: 1000;
+}
+
+#ui button {
+  padding: 8px 12px; margin-bottom: 6px; cursor: pointer;
+}
+
+#viewport {
+  width: 100%; height: 100%; overflow: hidden; position: relative; cursor: grab;
+}
+
+#world {
+  position: absolute; transform-origin: 0 0;
+}
+
+#map {
+  width: 2000px; height: 2000px;
+  background: url("https://picsum.photos/2000/2000") center/cover no-repeat;
+  position: absolute; top: 0; left: 0;
+}
+
+.token {
+  width: 50px; height: 50px; background: crimson; border-radius: 50%;
+  position: absolute; cursor: pointer; user-select: none;
+}
+
+#sheet {
+  position: fixed; bottom: 10px; left: 10px; background: #222;
+  padding: 10px; border: 1px solid #555; display: none; z-index: 1000;
+}
+</style>
 </head>
 <body>
-  <div id="topbar">
-    <div id="userArea">
-      <span id="who">Conectando...</span>
-      <button id="btnSignOut">Sair</button>
-    </div>
-    <div id="controls">
-      <button id="createToken">Criar token</button>
-    </div>
+
+<div id="ui">
+  <button id="createToken">Criar ficha</button>
+</div>
+
+<div id="sheet"></div>
+
+<div id="viewport">
+  <div id="world">
+    <div id="map"></div>
   </div>
+</div>
 
-  <div id="sheet" class="hidden"></div>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-  <div id="viewport">
-    <div id="world">
-      <div id="map"></div>
-    </div>
-  </div>
+<script>
+/* =========================
+   FIREBASE CONFIG
+========================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
+  authDomain: "marionetes-do-destino.firebaseapp.com",
+  databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
+  projectId: "marionetes-do-destino"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+const tokensRef = db.ref("tokens");
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+/* =========================
+   WORLD STATE
+========================= */
+const viewport = document.getElementById("viewport");
+const world = document.getElementById("world");
+const sheet = document.getElementById("sheet");
 
-  <script src="main.js"></script>
+let scale = 1, offsetX = 0, offsetY = 0;
+
+function updateTransform() {
+  world.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`;
+}
+
+/* =========================
+   HELPERS TOUCH
+========================= */
+function getPointerPos(e) {
+  if(e.touches) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
+  return {x:e.clientX, y:e.clientY};
+}
+
+/* =========================
+   MAP DRAG
+========================= */
+let draggingMap = false, startX, startY;
+
+function startDragMap(e){
+  if(e.target.classList.contains("token")) return;
+  draggingMap = true;
+  const pos = getPointerPos(e);
+  startX = pos.x - offsetX;
+  startY = pos.y - offsetY;
+  viewport.style.cursor = "grabbing";
+}
+function moveDragMap(e){
+  if(!draggingMap) return;
+  const pos = getPointerPos(e);
+  offsetX = pos.x - startX;
+  offsetY = pos.y - startY;
+  updateTransform();
+}
+function endDragMap(e){
+  draggingMap = false;
+  viewport.style.cursor = "grab";
+}
+
+viewport.addEventListener("mousedown", startDragMap);
+viewport.addEventListener("touchstart", startDragMap, {passive:false});
+window.addEventListener("mousemove", moveDragMap);
+window.addEventListener("touchmove", moveDragMap, {passive:false});
+window.addEventListener("mouseup", endDragMap);
+window.addEventListener("touchend", endDragMap);
+
+/* =========================
+   ZOOM
+========================= */
+viewport.addEventListener("wheel", e => {
+  e.preventDefault();
+  const delta = e.deltaY < 0 ? 1.1 : 0.9;
+  scale = Math.min(Math.max(scale*delta, 0.3),3);
+  updateTransform();
+},{passive:false});
+
+// Pinch-to-zoom mobile
+let initialDist = null, initialScale = 1;
+viewport.addEventListener("touchmove", e=>{
+  if(e.touches.length==2){
+    e.preventDefault();
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const dist = Math.hypot(dx,dy);
+    if(initialDist===null){ initialDist = dist; initialScale = scale; }
+    else{ scale = Math.min(Math.max(initialScale * dist/initialDist,0.3),3); updateTransform(); }
+  }
+},{passive:false});
+window.addEventListener("touchend", e=>{
+  if(e.touches.length<2) initialDist=null;
+});
+
+/* =========================
+   TOKENS
+========================= */
+function createTokenElement(id,data){
+  let el = document.getElementById(id);
+  if(!el){
+    el = document.createElement("div");
+    el.className="token"; el.id=id;
+    world.appendChild(el);
+
+    let dragging=false, dx, dy;
+
+    function startDragToken(e){
+      e.stopPropagation();
+      dragging=true;
+      const pos = getPointerPos(e);
+      dx = pos.x - parseFloat(el.style.left || 0);
+      dy = pos.y - parseFloat(el.style.top || 0);
+    }
+
+    function moveDragToken(e){
+      if(!dragging) return;
+      const pos = getPointerPos(e);
+      const x = (pos.x - offsetX)/scale - dx;
+      const y = (pos.y - offsetY)/scale - dy;
+      el.style.left = x+"px";
+      el.style.top = y+"px";
+      tokensRef.child(id).update({x,y});
+    }
+
+    function endDragToken(){ dragging=false; }
+
+    el.addEventListener("mousedown", startDragToken);
+    el.addEventListener("touchstart", startDragToken, {passive:false});
+    window.addEventListener("mousemove", moveDragToken);
+    window.addEventListener("touchmove", moveDragToken, {passive:false});
+    window.addEventListener("mouseup", endDragToken);
+    window.addEventListener("touchend", endDragToken);
+
+    el.addEventListener("click", e=>{
+      e.stopPropagation();
+      sheet.style.display="block";
+      sheet.innerHTML = `
+        <strong>Ficha Token</strong><br>
+        ID: ${id}<br>
+        X: ${Math.round(parseFloat(el.style.left))}<br>
+        Y: ${Math.round(parseFloat(el.style.top))}
+      `;
+    });
+  }
+
+  el.style.left = data.x+"px";
+  el.style.top = data.y+"px";
+}
+
+/* =========================
+   FIREBASE SYNC
+========================= */
+tokensRef.on("value", snap=>{
+  world.querySelectorAll(".token").forEach(t=>t.remove());
+  snap.forEach(child => createTokenElement(child.key, child.val()));
+});
+
+/* =========================
+   CREATE TOKEN
+========================= */
+document.getElementById("createToken").onclick = ()=>{
+  const id = "token_"+Date.now();
+  tokensRef.child(id).set({x:300,y:300});
+};
+</script>
+
 </body>
 </html>
