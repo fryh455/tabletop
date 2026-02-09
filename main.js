@@ -1,5 +1,5 @@
 /* =========================
-   FIREBASE CONFIG (seu projeto)
+   FIREBASE / REFS
 ========================= */
 firebase.initializeApp({
   apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
@@ -9,144 +9,132 @@ firebase.initializeApp({
 });
 const auth = firebase.auth();
 const db = firebase.database();
-const tokensRefRoot = db.ref("rooms/default/tokens"); // rooms structure (simple single room)
 const usersRef = db.ref("users");
+const tokensRefRoot = db.ref("rooms/default/tokens"); // single default room
 
 /* =========================
-   UI refs
+   UI REFS
 ========================= */
-const viewport = document.getElementById("viewport");
-const world = document.getElementById("world");
-const sheet = document.getElementById("sheet");
-
-const regEmail = document.getElementById("reg_email");
-const regPass = document.getElementById("reg_pass");
-const regRole = document.getElementById("reg_role");
-const btnRegister = document.getElementById("btnRegister");
-
-const logEmail = document.getElementById("log_email");
-const logPass = document.getElementById("log_pass");
-const btnLogin = document.getElementById("btnLogin");
-
-const userInfo = document.getElementById("userInfo");
 const whoSpan = document.getElementById("who");
 const btnSignOut = document.getElementById("btnSignOut");
-
 const createTokenBtn = document.getElementById("createToken");
+const sheet = document.getElementById("sheet");
+const viewport = document.getElementById("viewport");
+const world = document.getElementById("world");
 
 /* =========================
-   App state
+   APP STATE
 ========================= */
 let currentUser = null; // { uid, email, role }
 let scale = 1, offsetX = 0, offsetY = 0;
 const tokenElements = {}; // id -> { el, data }
 
 /* =========================
-   Utils
+   HELPERS
 ========================= */
 function updateTransform(){ world.style.transform = `translate(${offsetX}px, ${offsetY}px) scale(${scale})`; }
 
-/* convert screen coords to world coords */
 function screenToWorld(clientX, clientY){
-  const r = viewport.getBoundingClientRect();
+  const rect = viewport.getBoundingClientRect();
   return {
-    x: (clientX - r.left - offsetX) / scale,
-    y: (clientY - r.top - offsetY) / scale
+    x: (clientX - rect.left - offsetX) / scale,
+    y: (clientY - rect.top - offsetY) / scale
   };
 }
 
-/* permission helper */
 function canMoveToken(tokenData){
   if(!currentUser) return false;
   if(currentUser.role === "mestre") return true;
-  // player: can move token if owner === uid
   return tokenData && tokenData.owner === currentUser.uid;
 }
 
-/* add/remove movable class based on permission */
 function refreshTokenMovableClass(id){
-  const t = tokenElements[id];
-  if(!t) return;
-  const el = t.el;
-  const data = t.data;
+  const entry = tokenElements[id];
+  if(!entry) return;
+  const el = entry.el;
+  const data = entry.data;
   if(canMoveToken(data)) el.classList.add("movable");
   else el.classList.remove("movable");
 }
 
-/* safe setter to set data on token element without removing listeners */
+/* =========================
+   CREATE / UPDATE TOKEN ELEMENT (preserve listeners)
+   Uses pointer events and optimistic UI
+========================= */
 function createOrUpdateToken(id, data){
   let entry = tokenElements[id];
   if(!entry){
     const el = document.createElement("div");
     el.className = "token";
     el.id = id;
-    el.textContent = ""; // could add initials
+    el.textContent = data.label ? data.label[0].toUpperCase() : "T";
     world.appendChild(el);
 
     entry = { el, data: {} };
     tokenElements[id] = entry;
 
-    // hover: highlight if movable
+    // pointer interactions
     el.addEventListener("pointerenter", ()=> refreshTokenMovableClass(id));
-    el.addEventListener("pointerleave", ()=> el.classList.remove("movable"));
+    el.addEventListener("pointerleave", ()=> { /* keep state class until refresh */ });
 
-    // dragging logic (pointer events)
+    // dragging
     let dragging = false;
     let pointerId = null;
-    let offsetPointerX = 0, offsetPointerY = 0;
+    let offX = 0, offY = 0;
 
-    el.addEventListener("pointerdown", (e)=>{
-      e.stopPropagation();
-      // only start dragging if permission allows
+    el.addEventListener("pointerdown", (ev)=>{
+      ev.stopPropagation();
+      // ensure permission
       const latest = entry.data || data;
       if(!canMoveToken(latest)) return;
       dragging = true;
-      pointerId = e.pointerId;
+      pointerId = ev.pointerId;
       el.setPointerCapture(pointerId);
       el.classList.add("dragging");
-      offsetPointerX = e.offsetX;
-      offsetPointerY = e.offsetY;
+      offX = ev.offsetX;
+      offY = ev.offsetY;
     });
 
-    window.addEventListener("pointermove", (e)=>{
-      if(!dragging || e.pointerId !== pointerId) return;
-      const pos = screenToWorld(e.clientX, e.clientY);
-      const nx = pos.x - offsetPointerX;
-      const ny = pos.y - offsetPointerY;
+    window.addEventListener("pointermove", (ev)=>{
+      if(!dragging || ev.pointerId !== pointerId) return;
+      const pos = screenToWorld(ev.clientX, ev.clientY);
+      const nx = pos.x - offX;
+      const ny = pos.y - offY;
       el.style.left = nx + "px";
       el.style.top = ny + "px";
-      // optimistic UI: update local data
+      // optimistic update
       entry.data.x = nx; entry.data.y = ny;
-      // sync to firebase (throttle small)
+      // sync to Firebase (throttle optional)
       tokensRefRoot.child(id).update({ x: nx, y: ny });
     });
 
-    window.addEventListener("pointerup", (e)=>{
-      if(!dragging || e.pointerId !== pointerId) return;
+    window.addEventListener("pointerup", (ev)=>{
+      if(!dragging || ev.pointerId !== pointerId) return;
       dragging = false;
-      el.classList.remove("dragging");
-      try{ el.releasePointerCapture(pointerId); } catch {}
+      try{ entry.el.releasePointerCapture(pointerId);}catch{}
       pointerId = null;
-      // final position already synced in pointermove
+      el.classList.remove("dragging");
     });
 
-    // click opens sheet (editable if owner/mestre)
-    el.addEventListener("click", (e)=>{
-      e.stopPropagation();
+    // click -> open sheet (editable only if canMoveToken)
+    el.addEventListener("click", (ev)=>{
+      ev.stopPropagation();
       openSheetForToken(id, entry.data);
     });
   }
 
-  // update stored data and position (but preserve listeners)
+  // update stored data and position
   entry.data = Object.assign({}, entry.data, data);
   entry.el.style.left = (entry.data.x || 0) + "px";
   entry.el.style.top  = (entry.data.y || 0) + "px";
-  // update movable highlight immediately
+  entry.el.textContent = entry.data.label ? entry.data.label[0].toUpperCase() : "T";
+  // store owner for quick access
+  entry.el.dataset.owner = entry.data.owner || "";
   refreshTokenMovableClass(id);
 }
 
 /* remove token */
-function removeTokenElement(id){
+function removeToken(id){
   const entry = tokenElements[id];
   if(!entry) return;
   entry.el.remove();
@@ -154,7 +142,7 @@ function removeTokenElement(id){
 }
 
 /* =========================
-   UI: sheet (editable)
+   SHEET UI (editable if permitted)
 ========================= */
 function openSheetForToken(id, data){
   if(!data) return;
@@ -163,14 +151,14 @@ function openSheetForToken(id, data){
   sheet.innerHTML = `
     <div><strong>${data.name || "Token"}</strong></div>
     <div>Dono: ${ownerLabel}</div>
-    <label>Nome</label><input id="sheet_name" value="${data.name || ""}" />
-    <label>HP</label><input id="sheet_hp" type="number" value="${data.hp || 0}" />
-    <label>Notas</label><textarea id="sheet_notes">${data.notes || ""}</textarea>
-    <button id="sheet_save">Salvar</button>
-    <button id="sheet_close">Fechar</button>
+    <label>Nome</label><input id="sheet_name" value="${data.name||''}" />
+    <label>HP</label><input id="sheet_hp" type="number" value="${data.hp||0}" />
+    <label>Notas</label><textarea id="sheet_notes">${data.notes||''}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button id="sheet_save">Salvar</button>
+      <button id="sheet_close">Fechar</button>
+    </div>
   `;
-
-  // enable/disable fields based on permission: owner or mestre can edit
   const canEdit = canMoveToken(data);
   document.getElementById("sheet_name").disabled = !canEdit;
   document.getElementById("sheet_hp").disabled = !canEdit;
@@ -187,121 +175,63 @@ function openSheetForToken(id, data){
 }
 
 /* =========================
-   Firebase listeners (tokens)
-   Use child_x listeners to avoid rebuilding and preserve listeners
+   FIREBASE LISTENERS (child events to preserve listeners)
 ========================= */
-tokensRefRoot.on("child_added", snap => {
-  const id = snap.key;
-  const data = snap.val();
-  createOrUpdateToken(id, data);
-});
-tokensRefRoot.on("child_changed", snap => {
-  const id = snap.key;
-  const data = snap.val();
-  createOrUpdateToken(id, data);
-});
-tokensRefRoot.on("child_removed", snap => {
-  removeTokenElement(snap.key);
-});
+tokensRefRoot.on("child_added", snap => { createOrUpdateToken(snap.key, snap.val()); });
+tokensRefRoot.on("child_changed", snap => { createOrUpdateToken(snap.key, snap.val()); });
+tokensRefRoot.on("child_removed", snap => { removeToken(snap.key); });
 
 /* =========================
-   AUTH (register / login)
+   AUTH UI & FLOW
 ========================= */
-btnRegister.onclick = async () => {
-  try{
-    const email = regEmail.value.trim();
-    const pass = regPass.value;
-    const role = regRole.value;
-    const cred = await auth.createUserWithEmailAndPassword(email, pass);
-    const uid = cred.user.uid;
-    // save user profile (role)
-    usersRef.child(uid).set({ email, role });
-    // set currentUser locally (onAuthStateChanged will also fire)
-  }catch(err){
-    alert("Erro register: " + err.message);
-  }
-};
-
-btnLogin.onclick = async () => {
-  try{
-    const email = logEmail.value.trim();
-    const pass = logPass.value;
-    await auth.signInWithEmailAndPassword(email, pass);
-  }catch(err){
-    alert("Erro login: " + err.message);
-  }
-};
-
-btnSignOut.onclick = async () => {
-  await auth.signOut();
-};
-
-/* on auth change, load profile and update UI */
-auth.onAuthStateChanged(async user=>{
-  if(user){
-    const uid = user.uid;
-    // read role from DB
-    const snapshot = await usersRef.child(uid).once("value");
-    const profile = snapshot.val() || {};
-    currentUser = { uid, email: user.email, role: profile.role || "player" };
-    // update UI
-    document.getElementById("auth-forms").style.display = "none";
-    userInfo.style.display = "flex";
-    whoSpan.textContent = `${currentUser.email} (${currentUser.role})`;
-    // refresh all token classes (movable)
-    Object.keys(tokenElements).forEach(id=> refreshTokenMovableClass(id));
-  } else {
-    currentUser = null;
-    document.getElementById("auth-forms").style.display = "flex";
-    userInfo.style.display = "none";
-    whoSpan.textContent = "";
-    // remove movable class
-    Object.keys(tokenElements).forEach(id=>{
-      tokenElements[id].el.classList.remove("movable");
-    });
-  }
-});
-
-/* =========================
-   Create token (owner = current user)
-========================= */
-createTokenBtn.onclick = ()=>{
-  if(!currentUser){
-    alert("Faça login para criar tokens.");
+auth.onAuthStateChanged(async user => {
+  if(!user){ // not logged -> redirect to login
+    location.href = "login.html";
     return;
   }
+  // load profile role
+  const uid = user.uid;
+  const snap = await usersRef.child(uid).once("value");
+  const profile = snap.val() || {};
+  currentUser = { uid, email: user.email, role: profile.role || "player" };
+  whoSpan.textContent = `${currentUser.email} (${currentUser.role})`;
+  // refresh movable classes on existing tokens
+  Object.keys(tokenElements).forEach(id => refreshTokenMovableClass(id));
+});
+
+btnSignOut.onclick = async () => { await auth.signOut(); };
+
+/* =========================
+   CREATE TOKEN (owner = current user)
+========================= */
+createTokenBtn.onclick = ()=>{
+  if(!currentUser){ alert("Aguarde login..."); return; }
   const id = "token_" + Date.now();
   tokensRefRoot.child(id).set({
     x: 300,
     y: 300,
     owner: currentUser.uid,
     name: currentUser.email?.split("@")[0] || "Token",
+    label: currentUser.role === "mestre" ? "M" : "P",
     hp: 10,
     notes: ""
   });
 };
 
 /* =========================
-   Map pan & zoom (desktop)
+   MAP PAN & ZOOM
 ========================= */
-let panning = false, panStartX=0, panStartY=0;
-viewport.addEventListener("mousedown", (e)=>{
+let panning = false, px0=0, py0=0;
+viewport.addEventListener("mousedown", e=>{
   if(e.target.closest(".token")) return;
-  panning = true;
-  panStartX = e.clientX - offsetX;
-  panStartY = e.clientY - offsetY;
-  viewport.style.cursor = "grabbing";
+  panning = true; px0 = e.clientX - offsetX; py0 = e.clientY - offsetY; viewport.style.cursor="grabbing";
 });
 window.addEventListener("mousemove", e=>{
   if(!panning) return;
-  offsetX = e.clientX - panStartX;
-  offsetY = e.clientY - panStartY;
-  updateTransform();
+  offsetX = e.clientX - px0; offsetY = e.clientY - py0; updateTransform();
 });
-window.addEventListener("mouseup", ()=>{
-  if(panning) panning=false;
-  viewport.style.cursor = "grab";
-});
+window.addEventListener("mouseup", ()=>{ if(panning) panning=false; viewport.style.cursor="grab"; });
+
 viewport.addEventListener("wheel", e=>{
   e.preventDefault();
   const before = screenToWorld(e.clientX, e.clientY);
@@ -313,10 +243,8 @@ viewport.addEventListener("wheel", e=>{
   updateTransform();
 },{passive:false});
 
-/* click outside sheet hides */
+/* click outside sheet hides it */
 viewport.addEventListener("click", ()=> sheet.classList.add("hidden"));
 
-/* =========================
-   initial transform
-========================= */
+/* initial */
 updateTransform();
