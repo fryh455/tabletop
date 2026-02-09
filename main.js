@@ -2,10 +2,10 @@
    FIREBASE CONFIG
 ========================= */
 const firebaseConfig = {
-  apiKey: "SUA_API_KEY",
-  authDomain: "SEU_AUTH_DOMAIN",
-  databaseURL: "SUA_DATABASE_URL",
-  projectId: "SEU_PROJECT_ID",
+  apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
+  authDomain: "marionetes-do-destino.firebaseapp.com",
+  databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
+  projectId: "marionetes-do-destino"
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
