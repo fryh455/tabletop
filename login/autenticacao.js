@@ -68,7 +68,7 @@ if (typeof window !== "undefined") {
       const senha = document.getElementById("login-senha").value;
       const res = await loginEmailSenha(email, senha);
       if (res.sucesso) {
-        window.location.href = "/principal/principal.html";
+        window.location.href = "principal/principal.html";
       } else {
         alert("Erro: " + res.erro);
       }
@@ -88,4 +88,5 @@ if (typeof window !== "undefined") {
       }
     });
   }
+
 }
