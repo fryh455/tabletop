@@ -1,11 +1,40 @@
 <!doctype html>
 <html lang="pt-BR">
-<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>App</title></head>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Marionetes do Destino</title>
+</head>
 <body>
   <h1>Marionetes do Destino</h1>
-  <nav>
-    <a href="login/login.html">Login</a> |
-    <a href="principal/principal.html">Principal</a>
-  </nav>
+  <p>Inicializando…</p>
+
+  <script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+
+    // Inicialização global do Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
+      authDomain: "marionetes-do-destino.firebaseapp.com",
+      databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
+      projectId: "marionetes-do-destino"
+    };
+
+    if (!getApps().length) {
+      initializeApp(firebaseConfig);
+    }
+
+    const auth = getAuth();
+
+    // Redirecionamento automático
+    onAuthStateChanged(auth, user => {
+      if (user) {
+        window.location.replace("./principal/principal.html");
+      } else {
+        window.location.replace("./login/login.html");
+      }
+    });
+  </script>
 </body>
 </html>
