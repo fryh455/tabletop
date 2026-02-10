@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Login</title>
   <link rel="stylesheet" href="./login.css">
 </head>
@@ -10,48 +10,40 @@
   <main>
     <section id="login-section">
       <h1>Entrar</h1>
-      <input id="login-email" type="email" placeholder="email" />
-      <input id="login-senha" type="password" placeholder="senha" />
+      <input id="login-email" type="email" placeholder="email"/>
+      <input id="login-senha" type="password" placeholder="senha"/>
       <button id="btn-login">Entrar</button>
       <hr/>
       <h2>Registrar</h2>
-      <input id="reg-nome" type="text" placeholder="nome" />
-      <input id="reg-email" type="email" placeholder="email" />
-      <input id="reg-senha" type="password" placeholder="senha" />
+      <input id="reg-nome" type="text" placeholder="nome"/>
+      <input id="reg-email" type="email" placeholder="email"/>
+      <input id="reg-senha" type="password" placeholder="senha"/>
       <button id="btn-registrar">Registrar</button>
     </section>
   </main>
 
   <script type="module">
+    import { inicializarFirebase } from "../firebase-init.js";
     import {
-      inicializarAuth,
       loginEmailSenha,
       registrarEmailSenha
     } from "./autenticacao.js";
 
-    // Inicialização obrigatória do Firebase ANTES de qualquer uso
-    inicializarAuth({
-      apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
-      authDomain: "marionetes-do-destino.firebaseapp.com",
-      databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
-      projectId: "marionetes-do-destino"
-    });
+    inicializarFirebase();
 
-    const emailLogin = document.getElementById("login-email");
-    const senhaLogin = document.getElementById("login-senha");
-    const btnLogin = document.getElementById("btn-login");
-
-    const nomeReg = document.getElementById("reg-nome");
-    const emailReg = document.getElementById("reg-email");
-    const senhaReg = document.getElementById("reg-senha");
-    const btnRegistrar = document.getElementById("btn-registrar");
-
-    btnLogin.onclick = async () => {
-      await loginEmailSenha(emailLogin.value, senhaLogin.value);
+    document.getElementById("btn-login").onclick = async () => {
+      await loginEmailSenha(
+        document.getElementById("login-email").value,
+        document.getElementById("login-senha").value
+      );
     };
 
-    btnRegistrar.onclick = async () => {
-      await registrarEmailSenha(nomeReg.value, emailReg.value, senhaReg.value);
+    document.getElementById("btn-registrar").onclick = async () => {
+      await registrarEmailSenha(
+        document.getElementById("reg-nome").value,
+        document.getElementById("reg-email").value,
+        document.getElementById("reg-senha").value
+      );
     };
   </script>
 </body>
