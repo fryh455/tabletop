@@ -60,7 +60,7 @@ if (typeof window !== "undefined") {
     const nome = document.getElementById("nome-mesa").value;
     try {
       const res = await criarMesa(nome);
-      window.location.href = `/mesa/mesa.html?mid=${res.mesaId}`;
+      window.location.href = `mesa/mesa.html?mid=${res.mesaId}`;
     } catch (e) {
       alert(e.message);
     }
@@ -77,7 +77,7 @@ if (typeof window !== "undefined") {
       btn.textContent = "Entrar";
       btn.addEventListener("click", async () => {
         await entrarEmMesa(m.mesaId);
-        window.location.href = `./mesa/mesa.html?mid=${m.mesaId}`;
+        window.location.href = `mesa/mesa.html?mid=${m.mesaId}`;
       });
       li.appendChild(btn);
       ul.appendChild(li);
@@ -85,3 +85,4 @@ if (typeof window !== "undefined") {
   });
 
 }
+
