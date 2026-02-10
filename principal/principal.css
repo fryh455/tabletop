@@ -1,0 +1,7 @@
+/* IDs: #btn-criar-mesa, #btn-buscar, #lista-mesas */
+body{font-family:Arial,Helvetica,sans-serif;background:#09121a;color:#dfeffb;margin:0;padding:24px}
+main{max-width:960px;margin:0 auto}
+input{padding:8px;margin:6px}
+button{padding:8px;margin:6px}
+#lista-mesas{list-style:none;padding:0}
+#lista-mesas li{padding:8px;border-bottom:1px solid #113445}

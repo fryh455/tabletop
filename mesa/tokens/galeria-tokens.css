@@ -1,0 +1,4 @@
+/* IDs: #token-list, #btn-criar-token */
+#token-gallery{padding:12px}
+#token-list{display:flex;flex-direction:column;gap:8px}
+.token-item{padding:8px;border:1px solid #223;display:flex;justify-content:space-between}
