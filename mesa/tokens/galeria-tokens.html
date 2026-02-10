@@ -10,6 +10,11 @@
     <div id="token-list"></div>
     <button id="btn-criar-token">Criar</button>
   </section>
-  <script type="module" src="./tokens.js"></script>
+
+  <script type="module">
+    import { inicializarFirebase } from "../../firebase-init.js";
+    inicializarFirebase();
+    import("./tokens.js");
+  </script>
 </body>
 </html>
