@@ -77,10 +77,11 @@ if (typeof window !== "undefined") {
       btn.textContent = "Entrar";
       btn.addEventListener("click", async () => {
         await entrarEmMesa(m.mesaId);
-        window.location.href = `/mesa/mesa.html?mid=${m.mesaId}`;
+        window.location.href = `./mesa/mesa.html?mid=${m.mesaId}`;
       });
       li.appendChild(btn);
       ul.appendChild(li);
     });
   });
+
 }
