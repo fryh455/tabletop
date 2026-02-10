@@ -21,6 +21,38 @@
       <button id="btn-registrar">Registrar</button>
     </section>
   </main>
-  <script type="module" src="./autenticacao.js"></script>
+
+  <script type="module">
+    import {
+      inicializarAuth,
+      loginEmailSenha,
+      registrarEmailSenha
+    } from "./autenticacao.js";
+
+    // Inicialização obrigatória do Firebase ANTES de qualquer uso
+    inicializarAuth({
+      apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
+      authDomain: "marionetes-do-destino.firebaseapp.com",
+      databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
+      projectId: "marionetes-do-destino"
+    });
+
+    const emailLogin = document.getElementById("login-email");
+    const senhaLogin = document.getElementById("login-senha");
+    const btnLogin = document.getElementById("btn-login");
+
+    const nomeReg = document.getElementById("reg-nome");
+    const emailReg = document.getElementById("reg-email");
+    const senhaReg = document.getElementById("reg-senha");
+    const btnRegistrar = document.getElementById("btn-registrar");
+
+    btnLogin.onclick = async () => {
+      await loginEmailSenha(emailLogin.value, senhaLogin.value);
+    };
+
+    btnRegistrar.onclick = async () => {
+      await registrarEmailSenha(nomeReg.value, emailReg.value, senhaReg.value);
+    };
+  </script>
 </body>
 </html>
