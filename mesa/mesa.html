@@ -19,6 +19,11 @@
       <section id="rolagem-ui"></section>
     </aside>
   </main>
-  <script type="module" src="./mesa.js"></script>
+
+  <script type="module">
+    import { inicializarFirebase } from "../firebase-init.js";
+    inicializarFirebase();
+    import("./mesa.js");
+  </script>
 </body>
 </html>
