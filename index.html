@@ -7,27 +7,13 @@
 </head>
 <body>
   <h1>Marionetes do Destino</h1>
-  <p>Inicializando…</p>
 
   <script type="module">
-    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+    import { inicializarFirebase } from "./firebase-init.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 
-    // Inicialização global do Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyBjSCYNOngXOSQGBU7jMj1kgf7hunfMjyI",
-      authDomain: "marionetes-do-destino.firebaseapp.com",
-      databaseURL: "https://marionetes-do-destino-default-rtdb.firebaseio.com",
-      projectId: "marionetes-do-destino"
-    };
+    const { auth } = inicializarFirebase();
 
-    if (!getApps().length) {
-      initializeApp(firebaseConfig);
-    }
-
-    const auth = getAuth();
-
-    // Redirecionamento automático
     onAuthStateChanged(auth, user => {
       if (user) {
         window.location.replace("./principal/principal.html");
