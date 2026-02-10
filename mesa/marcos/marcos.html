@@ -4,6 +4,11 @@
 <body>
   <div id="lista-marcos"></div>
   <button id="btn-criar-marco">Criar Marco</button>
-  <script type="module" src="./marcos.js"></script>
+
+  <script type="module">
+    import { inicializarFirebase } from "../../firebase-init.js";
+    inicializarFirebase();
+    import("./marcos.js");
+  </script>
 </body>
 </html>
