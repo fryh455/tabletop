@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SUR4 Tabletop</title>
+  <link rel="icon" href="./favicon.ico">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="stylesheet" href="./src/styles/main.css">
+  <link rel="stylesheet" href="./src/styles/layout.css">
+  <link rel="stylesheet" href="./src/styles/modals.css">
+  <link rel="stylesheet" href="./src/styles/mobile.css">
+  <!-- Firebase (CDN, modular) -->
+  <script type="module">
+    import { boot } from "./src/core/app.js";
+    window.addEventListener("DOMContentLoaded", boot);
+  </script>
+</head>
+<body>
+  <div id="app" class="app-shell">
+    <header id="header"></header>
+    <main class="main">
+      <section class="card auth-card" id="auth-card"></section>
+      <section class="card rooms-card hidden" id="rooms-card"></section>
+    </main>
+    <footer class="footer">SUR4 Tabletop • Vanilla JS + Firebase</footer>
+  </div>
+</body>
+</html>
