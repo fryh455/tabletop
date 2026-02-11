@@ -490,14 +490,15 @@ async function setPostImageKeyInteractive(){
   }
 }
 
-function applyModOp(total, mod, op){
-  const m = num(mod,0);
+function applyModOp(total, m, op){
+  const mod = Number(m)||0;
   const o = (op||"add");
   if(o==="mul"){
-    // multiplier: 2 => double, 1 => no change
-    return Math.floor(total * m);
+    // multiplicação direta no total
+    return Math.floor(total * mod);
   }
-  return total + m;
+  // soma (aceita negativo)
+  return total + mod;
 }
 
 function mentalMods(mental){
@@ -515,8 +516,9 @@ function mentalPenalty(mental){ return (mental<=-8) ? -5 : 0; }
 function advantagesDisabled(mental){ return mental<=-11; }
 
 async function pushRoll(payload){
-  await dbPush(`rooms/${roomId}/rolls`, payload);
-  await dbPush(`logs/${roomId}`, { type:"roll", actorUid: me.uid, message: clampLen(payload?.context?.label||"Rolagem",200), payload: payload.context||{}, ts: Date.now() });
+  const clean = JSON.parse(JSON.stringify(payload||{}));
+  await dbPush(`rooms/${roomId}/rolls`, clean);
+  await dbPush(`logs/${roomId}`, { type:"roll", actorUid: me.uid, message: clampLen(clean?.context?.label||"Rolagem",200), payload: clean.context||{}, ts: Date.now() });
 }
 
 async function rollAttrInline(char, attr){
@@ -585,10 +587,10 @@ async function rollAdvInline(char, adv){
   const pen=mentalPenalty(mental);
   const die=rollDice("normal").dice[0];  const modRaw = num(adv.mod,0);
   let total = die + base + pen + mm.diceBonus;
-  if(modRaw>0){ total = applyModOp(total, modRaw, adv.op); }
+  if(modRaw!==0){ total = applyModOp(total, modRaw, adv.op); }
   const success=total>=dt;
   await pushRoll({ userUid: me.uid, expression:`TEST 1d12+${base}${(adv.op==="mul"&&modRaw>0)?`×${modRaw}`:`+${Math.max(0,num(adv.mod,0))}`}${pen?pen:""} vs ${dt}`, mode:"normal", dice:[die], picked:die, total,
-    context:{ roomId, charId:char.charId, kind:adv.kind||"adv", advId:adv.id, name:adv.name, type:adv.type, attrUsed:a, dt, mod:Math.max(0,num(adv.mod,0)), op:(adv.op||"add"), success, label:`${(adv.kind||"Vantagem")} ${adv.name}: ${success?"SUCESSO":"FALHA"} (${total} vs ${dt})`, mental, penalty:pen }, visibility:"public", timestamp:Date.now() });
+    context:{ roomId, charId:char.charId, kind:adv.kind||"adv", advId:adv.id, name:adv.name, type:(adv.type||adv.kind||""), attrUsed:a, dt, mod:Math.max(0,num(adv.mod,0)), op:(adv.op||"add"), success, label:`${(adv.kind||"Vantagem")} ${adv.name}: ${success?"SUCESSO":"FALHA"} (${total} vs ${dt})`, mental, penalty:pen }, visibility:"public", timestamp:Date.now() });
   toast(`Vantagem ${adv.name}: ${success?"SUCESSO":"FALHA"} (${total} vs ${dt})`, success?"ok":"error");
 }
 async function rollAdvDTInline(adv){
@@ -1601,11 +1603,11 @@ if(tab==="room"){
       <button class="danger" id="btnDeleteRoom">Apagar mesa</button>
     </div>
   `;
-        body.querySelector("#bgSave").onclick=async ()=>{ const url=clampLen(body.querySelector("#bgUrl").value.trim(),420); await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:url }); toast("Fundo salvo.","ok"); };
-    body.querySelector("#bgClear").onclick=async ()=>{ await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:"" }); toast("Fundo removido.","ok"); };
-    body.querySelector("#bgUpload").onclick=async ()=>{
+        (body.querySelector("#bgSave")||{}).onclick=async ()=>{ const url=clampLen((body.querySelector("#bgUrl")?.value||"").trim(),420); await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:url }); toast("Fundo salvo.","ok"); };
+    (body.querySelector("#bgClear")||{}).onclick=async ()=>{ await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:"" }); toast("Fundo removido.","ok"); };
+    (body.querySelector("#bgUpload")||{}).onclick=async ()=>{
       try{
-        const file=body.querySelector("#bgFile").files?.[0];
+        const file=body.querySelector("#bgFile")?.files?.[0];
         if(!file) throw new Error("Escolha um arquivo.");
         let key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
         if(!key) key = await ensurePostImageKey();
@@ -1615,14 +1617,14 @@ if(tab==="room"){
         toast("Fundo atualizado.","ok");
       }catch(e){ toast(String(e?.message||e),"error"); }
     };
-    body.querySelector("#bgFile").onchange=()=>body.querySelector("#bgUpload").click();
-    body.querySelector("#btnDeleteRoom").onclick=deleteRoomWithSafeguard;
-    body.querySelector("#fogToggle").onclick=async ()=>{ const enabled=!!room?.settings?.fog?.enabled; await dbUpdate(`rooms/${roomId}/settings/fog`, { enabled: !enabled }); toast(`Fog ${!enabled?"ON":"OFF"}`,"ok"); };
-    body.querySelector("#fogClear").onclick=async ()=>{ await dbSet(`rooms/${roomId}/settings/fog/blocks`, {}); toast("Fog limpo.","ok"); };
-    body.querySelector("#fogPaint").onclick=()=>{ toolsState.fogPaintEnabled=!toolsState.fogPaintEnabled; syncToolsUI(); };
-    body.querySelector("#fogSize").onchange=()=>{ fogBrush=Math.max(20,Math.min(800,num(body.querySelector("#fogSize").value,160))); };
-    body.querySelector("#fogModePaint").onclick=()=>{ fogMode="paint"; toast("Fog: pintar","ok"); };
-    body.querySelector("#fogModeErase").onclick=()=>{ fogMode="erase"; toast("Fog: apagar","ok"); };
+    (body.querySelector("#bgFile")||{}).onchange=()=>body.querySelector("#bgUpload").click();
+    (body.querySelector("#btnDeleteRoom")||{}).onclick=deleteRoomWithSafeguard;
+    (body.querySelector("#fogToggle")||{}).onclick=async ()=>{ const enabled=!!room?.settings?.fog?.enabled; await dbUpdate(`rooms/${roomId}/settings/fog`, { enabled: !enabled }); toast(`Fog ${!enabled?"ON":"OFF"}`,"ok"); };
+    (body.querySelector("#fogClear")||{}).onclick=async ()=>{ await dbSet(`rooms/${roomId}/settings/fog/blocks`, {}); toast("Fog limpo.","ok"); };
+    (body.querySelector("#fogPaint")||{}).onclick=()=>{ toolsState.fogPaintEnabled=!toolsState.fogPaintEnabled; syncToolsUI(); };
+    (body.querySelector("#fogSize")||{}).onchange=()=>{ fogBrush=Math.max(20,Math.min(800,num(body.querySelector("#fogSize").value,160))); };
+    (body.querySelector("#fogModePaint")||{}).onclick=()=>{ fogMode="paint"; toast("Fog: pintar","ok"); };
+    (body.querySelector("#fogModeErase")||{}).onclick=()=>{ fogMode="erase"; toast("Fog: apagar","ok"); };
     return;
   }
 
@@ -1649,15 +1651,15 @@ if(tab==="map"){
       <small style="color:var(--muted)">O upload pede PostImage key automaticamente se faltar.</small>
     </div>
   `;
-  body.querySelector("#bgSave").onclick=async ()=>{
+  (body.querySelector("#bgSave")||{}).onclick=async ()=>{
     if(!isMaster()) return toast("Só o mestre.","error");
-    const u = body.querySelector("#bgUrl").value.trim();
+    const u = (body.querySelector("#bgUrl")?.value||"").trim();
     await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: u });
     toast("Mapa atualizado.","ok");
   };
-  body.querySelector("#bgUpload").onclick=async ()=>{
+  (body.querySelector("#bgUpload")||{}).onclick=async ()=>{
     if(!isMaster()) return toast("Só o mestre.","error");
-    const f = body.querySelector("#bgFile").files?.[0];
+    const f = body.querySelector("#bgFile")?.files?.[0];
     if(!f) return toast("Escolha um arquivo.","error");
     let key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
     if(!key) key = await ensurePostImageKey();
@@ -1699,33 +1701,33 @@ if(tab==="fog"){
     </div>
   `;
 
-  body.querySelector("#fogToggle").onclick=async ()=>{
+  (body.querySelector("#fogToggle")||{}).onclick=async ()=>{
     if(!isMaster()) return toast("Só o mestre.","error");
     const cur = !!room?.settings?.fog?.enabled;
     await dbUpdate(`rooms/${roomId}/settings/fog`, { enabled: !cur });
     toast(!cur ? "Fog ativada." : "Fog desativada.","ok");
   };
 
-  body.querySelector("#fogPaint").onclick=()=>{ fogMode="paint"; toast("Fog: pintar","info"); };
-  body.querySelector("#fogErase").onclick=()=>{ fogMode="erase"; toast("Fog: apagar","info"); };
+  (body.querySelector("#fogPaint")||{}).onclick=()=>{ fogMode="paint"; toast("Fog: pintar","info"); };
+  (body.querySelector("#fogErase")||{}).onclick=()=>{ fogMode="erase"; toast("Fog: apagar","info"); };
 
-  body.querySelector("#fogSize").onchange=()=>{
+  (body.querySelector("#fogSize")||{}).onchange=()=>{
     fogBrush = Math.max(20, Math.min(800, num(body.querySelector("#fogSize").value, 80)));
     toast("Tamanho atualizado.","ok");
   };
 
-  body.querySelector("#fogUse").onclick=()=>{
+  (body.querySelector("#fogUse")||{}).onclick=()=>{
     if(!isMaster()) return toast("Só o mestre.","error");
     toolsState.fogPaintEnabled=true;
     toast("Modo fog ON: clique/arraste no mapa.","ok");
   };
 
-  body.querySelector("#fogStop").onclick=()=>{
+  (body.querySelector("#fogStop")||{}).onclick=()=>{
     toolsState.fogPaintEnabled=false;
     toast("Modo fog OFF.","info");
   };
 
-  body.querySelector("#fogClear").onclick=async ()=>{
+  (body.querySelector("#fogClear")||{}).onclick=async ()=>{
     if(!isMaster()) return toast("Só o mestre.","error");
     if(!confirm("Limpar toda a fog da sala?")) return;
     await dbSet(`rooms/${roomId}/settings/fog/blocks`, null);
@@ -1756,7 +1758,7 @@ if(tab==="rolls"){
         </div>
       </div>
     `;
-    body.querySelector("#clearRolls").onclick=async ()=>{ await dbSet(`rooms/${roomId}/rolls`, {}); toast("Rolagens limpas.","ok"); };
+    (body.querySelector("#clearRolls")||{}).onclick=async ()=>{ await dbSet(`rooms/${roomId}/rolls`, {}); toast("Rolagens limpas.","ok"); };
     return;
   }
 
@@ -1781,7 +1783,7 @@ if(tab==="rolls"){
         </div>
       </div>
     `;
-    body.querySelector("#clearLogs").onclick=async ()=>{ await dbSet(`logs/${roomId}`, {}); toast("Logs limpos.","ok"); };
+    (body.querySelector("#clearLogs")||{}).onclick=async ()=>{ await dbSet(`logs/${roomId}`, {}); toast("Logs limpos.","ok"); };
     return;
   }
 }
