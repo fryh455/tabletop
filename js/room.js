@@ -461,6 +461,21 @@ canvas.addEventListener("touchend",()=>{
 
 
 
+
+async function ensurePostImageKey(){
+  let key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
+  if(key && key.trim().length>=8) return key.trim();
+  const k = prompt("Para enviar imagens, cole sua PostImage API Key:");
+  if(!k) throw new Error("PostImage API Key ausente.");
+  const kk = String(k).trim();
+  if(kk.length<8) throw new Error("PostImage API Key inválida.");
+  localStorage.setItem("sur4_postimage_key", kk);
+  if(isMaster()){
+    await dbUpdate(`rooms/${roomId}/settings`, { postimageKey: kk });
+  }
+  return kk;
+}
+
 async function setPostImageKeyInteractive(){
   const k = prompt("Cole sua PostImage API Key:");
   if(!k) return;
@@ -1209,7 +1224,7 @@ async function createToken(){
 async function openTokenEditor(tokenId){
   const t=tokens?.[tokenId];
   if(!t) return;
-  const apiKey = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
+  let apiKey = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
   const modal=document.createElement("div");
   modal.style.cssText="position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:80; background:rgba(15,20,32,.97); border:1px solid rgba(255,255,255,.10); padding:14px; border-radius:16px; width:380px; max-width:92vw";
   modal.innerHTML = `
@@ -1242,7 +1257,8 @@ async function openTokenEditor(tokenId){
   try{
     const file=modal.querySelector("#tFile").files?.[0];
     if(!file) throw new Error("Escolha um arquivo.");
-    const url=await uploadToPostImage(file, apiKey);
+    if(!apiKey) apiKey = await ensurePostImageKey();
+      const url=await uploadToPostImage(file, apiKey);
     modal.querySelector("#tSprite").value=url;
     await dbPush("images", { url, ownerUid: me.uid, source:"postimage", createdAt: Date.now(), meta:{ name:file.name, kind:"tokenSprite", tokenId } });
     await dbUpdate(`rooms/${roomId}/tokens/${tokenId}`, { spriteUrl: url, updatedAt: Date.now() });
@@ -1557,7 +1573,56 @@ function syncToolsUI(){
   const bgUrl = room?.settings?.map?.bgUrl || "";
   const postKey = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
 
-  if(tab==="tokens"){
+  
+if(tab==="room"){
+  const postKey = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
+  body.innerHTML = `
+    <div class="card pad">
+      <strong>Mesa</strong>
+      <p style="margin:8px 0; color:var(--muted)">Configurações gerais da sala.</p>
+
+      <label class="label" style="margin-top:10px">PostImage API Key</label>
+      <div class="actions" style="gap:8px">
+        <input id="postKey" style="flex:1" placeholder="opcional (auto pergunta no upload)" value="${esc(postKey)}" />
+        <button class="secondary" id="postKeyBtn">Definir</button>
+      </div>
+      <small style="color:var(--muted)">Mestre salva na sala. Player salva só no navegador.</small>
+
+      <div class="actions" style="margin-top:12px">
+        <button class="secondary" id="btnClearRolls">Limpar rolagens</button>
+        <button class="secondary" id="btnClearLogs">Limpar logs</button>
+      </div>
+    </div>
+
+    <div class="card pad" style="margin-top:10px">
+      <strong>Perigo</strong>
+      <p style="margin:8px 0; color:var(--muted)">Apagar a mesa remove tudo (tokens, fichas, fog, marcos, rolagens e logs).</p>
+      <button class="danger" id="btnDeleteRoom">Apagar mesa</button>
+    </div>
+  `;
+  body.querySelector("#postKeyBtn").onclick=()=>setPostImageKeyInteractive();
+  body.querySelector("#postKey").onchange=async ()=>{
+    const k = body.querySelector("#postKey").value.trim();
+    localStorage.setItem("sur4_postimage_key", k);
+    if(isMaster()) await dbUpdate(`rooms/${roomId}/settings`, { postimageKey: k });
+    toast("Key salva.","ok");
+  };
+  body.querySelector("#btnDeleteRoom").onclick=deleteRoomWithSafeguard;
+  body.querySelector("#btnClearRolls").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    if(!confirm("Limpar rolagens da sala?")) return;
+    await dbSet(`rooms/${roomId}/rolls`, null);
+    toast("Rolagens limpas.","ok");
+  };
+  body.querySelector("#btnClearLogs").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    if(!confirm("Limpar logs da sala?")) return;
+    await dbSet(`logs/${roomId}`, null);
+    toast("Logs limpos.","ok");
+  };
+  return;
+}
+if(tab==="tokens"){
     const list = Object.entries(tokens||{}).filter(([_,t])=>!t?.inMarkerId);
     body.innerHTML = `
       <div class="card pad" style="margin-top:10px">
@@ -1694,11 +1759,6 @@ function syncToolsUI(){
         </div>
         <small style="color:var(--muted)">Players veem a fog como preto total.</small>
       </div>
-      <div class="card pad" style="margin-top:10px">
-        <strong>Perigo</strong>
-        <p style="margin:8px 0; color:var(--muted)">Apagar a mesa remove tudo (tokens, fichas, fog, marcos, rolagens e logs).</p>
-        <button class="danger" id="btnDeleteRoom">Apagar mesa</button>
-      </div>
     `;
     body.querySelector("#postKeyBtn").onclick=()=>setPostImageKeyInteractive();
     body.querySelector("#postKey").onchange=async ()=>{
@@ -1713,8 +1773,9 @@ function syncToolsUI(){
       try{
         const file=body.querySelector("#bgFile").files?.[0];
         if(!file) throw new Error("Escolha um arquivo.");
-        const key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
-        const url = await uploadToPostImage(file, key);
+        let key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
+        if(!key) key = await ensurePostImageKey();
+      const url = await uploadToPostImage(file, key);
         await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:url });
         await dbPush("images", { url, ownerUid: me.uid, source:"postimage", createdAt: Date.now(), meta:{ name:file.name, kind:"mapBg" } });
         toast("Fundo atualizado.","ok");
