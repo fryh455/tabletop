@@ -375,7 +375,7 @@ async function endPointerAt(sx,sy){
 
 
 /* Pointer Events (works for mouse + touch) */
-canvas.style.touchAction = "manipulation";
+canvas.style.touchAction = "none";
 
 canvas.addEventListener("pointerdown",(ev)=>{
   try{
@@ -1166,6 +1166,7 @@ function ensureToolsPopup(){
       <button class="secondary" data-tab="players">Players</button>
       <button class="secondary" data-tab="markers">Marcos</button>
       <button class="secondary" data-tab="map">Mapa/Fog</button>
+      <button class="secondary" data-tab="room">Mesa</button>
       <button class="secondary" data-tab="rolls">Rolagens</button>
       <button class="secondary" data-tab="logs">Logs</button>
     </div>
@@ -1600,174 +1601,7 @@ if(tab==="room"){
       <button class="danger" id="btnDeleteRoom">Apagar mesa</button>
     </div>
   `;
-  body.querySelector("#postKeyBtn").onclick=()=>setPostImageKeyInteractive();
-  body.querySelector("#postKey").onchange=async ()=>{
-    const k = body.querySelector("#postKey").value.trim();
-    localStorage.setItem("sur4_postimage_key", k);
-    if(isMaster()) await dbUpdate(`rooms/${roomId}/settings`, { postimageKey: k });
-    toast("Key salva.","ok");
-  };
-  body.querySelector("#btnDeleteRoom").onclick=deleteRoomWithSafeguard;
-  body.querySelector("#btnClearRolls").onclick=async ()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    if(!confirm("Limpar rolagens da sala?")) return;
-    await dbSet(`rooms/${roomId}/rolls`, null);
-    toast("Rolagens limpas.","ok");
-  };
-  body.querySelector("#btnClearLogs").onclick=async ()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    if(!confirm("Limpar logs da sala?")) return;
-    await dbSet(`logs/${roomId}`, null);
-    toast("Logs limpos.","ok");
-  };
-  return;
-}
-if(tab==="tokens"){
-    const list = Object.entries(tokens||{}).filter(([_,t])=>!t?.inMarkerId);
-    body.innerHTML = `
-      <div class="card pad" style="margin-top:10px">
-        <div class="actions" style="justify-content:space-between">
-          <strong>Tokens</strong>
-          <button class="secondary" id="newToken">+ token</button>
-        </div>
-        <div class="list" style="margin-top:8px">
-          ${list.length? list.map(([id,t])=>`
-            <div class="item">
-              <div class="actions" style="justify-content:space-between">
-                <strong>${esc(t.name||"Token")}</strong>
-                <div class="actions">
-                  <button class="secondary" data-edit="${id}">Editar</button>
-                  <button class="danger" data-del="${id}">Del</button>
-                </div>
-              </div>
-              <small>player: ${t.ownerUid?uidShort(t.ownerUid):"mestre"} | ficha: ${t.linkedCharId?esc(characters?.[t.linkedCharId]?.name||t.linkedCharId):"—"}</small>
-            </div>
-          `).join("") : `<div class="item"><small>Nenhum token.</small></div>`}
-        </div>
-      </div>
-    `;
-    body.querySelector("#newToken").onclick=createToken;
-    body.querySelectorAll("[data-edit]").forEach(b=> b.onclick=()=>openTokenEditor(b.dataset.edit));
-    body.querySelectorAll("[data-del]").forEach(b=> b.onclick=async ()=>{ await dbSet(`rooms/${roomId}/tokens/${b.dataset.del}`, null); toast("Token deletado.","ok"); });
-    return;
-  }
-
-  if(tab==="sheets"){
-    const list = Object.values(characters||{}).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
-    body.innerHTML = `
-      <div class="card pad" style="margin-top:10px">
-        <div class="actions" style="justify-content:space-between">
-          <strong>Fichas</strong>
-          <button class="secondary" id="create">Criar ficha</button>
-        </div>
-        <div class="list" style="margin-top:8px">
-          ${list.length? list.map(c=>`
-            <div class="item">
-              <div class="actions" style="justify-content:space-between">
-                <strong>${esc(c.name||"Ficha")}</strong>
-                <div class="actions"><small class="mono">${c.charId}</small><button class="secondary" data-edit-sheet="${c.charId}">Editar</button><button class="danger" data-del-sheet="${c.charId}">Apagar</button></div>
-              </div>
-              <small>clique no token pra abrir a ficha</small>
-            </div>
-          `).join("") : `<div class="item"><small>Nenhuma ficha.</small></div>`}
-        </div>
-      </div>
-    `;
-    body.querySelector("#create").onclick=openCreateSheet;
-    body.querySelectorAll("[data-del-sheet]").forEach(b=> b.onclick=()=>{ if(confirm("Apagar essa ficha?")) deleteCharacter(b.dataset.delSheet); });
-    body.querySelectorAll("[data-edit-sheet]").forEach(b=> b.onclick=()=>{ const c=characters?.[b.dataset.editSheet]; if(c) openCharBaseEditor(c); });
-    return;
-  }
-
-  if(tab==="players"){
-    const list = Object.values(players||{});
-    body.innerHTML = `
-      <div class="card pad" style="margin-top:10px">
-        <strong>Players</strong>
-        <div class="list" style="margin-top:8px">
-          ${list.length? list.map(p=>`
-            <div class="item">
-              <div class="actions" style="justify-content:space-between">
-                <strong>${uidShort(p.uid)}</strong>
-                <small>${esc(p.role||"player")}</small>
-              </div>
-              <small>${p.uid}</small>
-            </div>
-          `).join("") : `<div class="item"><small>Nenhum player conectado.</small></div>`}
-        </div>
-      </div>
-    `;
-    return;
-  }
-
-  if(tab==="markers"){
-    const list = Object.entries(markers||{});
-    body.innerHTML = `
-      <div class="card pad" style="margin-top:10px">
-        <div class="actions" style="justify-content:space-between">
-          <strong>Marcos</strong>
-          <button class="secondary" id="place">Colocar</button>
-        </div>
-        <div class="list" style="margin-top:8px">
-          ${list.length? list.map(([id,m])=>`
-            <div class="item">
-              <div class="actions" style="justify-content:space-between">
-                <strong>${esc(m.title||"Marco")}</strong>
-                <button class="secondary" data-open="${id}">Abrir</button>
-              </div>
-              <small class="mono">x:${num(m.x,0).toFixed(0)} y:${num(m.y,0).toFixed(0)}</small>
-            </div>
-          `).join("") : `<div class="item"><small>Nenhum marco.</small></div>`}
-        </div>
-      </div>
-    `;
-    body.querySelector("#place").onclick=()=>{ placingMarker=true; toast("Clique no mapa para colocar o marco.","ok"); };
-    body.querySelectorAll("[data-open]").forEach(b=> b.onclick=()=>openMarkerPopup(b.dataset.open).catch(()=>{}));
-    return;
-  }
-
-  if(tab==="map"){
-    body.innerHTML = `
-      <div class="card pad" style="margin-top:10px">
-        <strong>Mapa</strong>
-        <label class="label" style="margin-top:8px">Imagem de fundo (URL)</label>
-        <input id="bgUrl" value="${esc(bgUrl)}" placeholder="https://..." />
-        <div class="actions" style="margin-top:8px; flex-wrap:wrap">
-          <button class="secondary" id="bgSave">Salvar</button>
-          <button class="secondary" id="bgClear">Remover</button>
-        </div>
-        <div class="actions" style="margin-top:10px; flex-wrap:wrap">
-          <input id="bgFile" type="file" accept="image/*" />
-          <button class="secondary" id="bgUpload">Upload</button>
-        </div>
-        <label class="label" style="margin-top:10px">PostImage API Key</label>
-        <input id="postKey" value="${esc(postKey)}" placeholder="cole aqui" />
-      </div>
-
-      <div class="card pad" style="margin-top:12px">
-        <strong>Fog</strong>
-        <div class="actions" style="margin-top:8px; flex-wrap:wrap">
-          <button class="secondary" id="fogToggle">Fog: ${fogEnabled?"ON":"OFF"}</button>
-          <button class="secondary" id="fogClear">Limpar fog</button>
-          <button class="secondary" id="fogPaint">Pintar: ${toolsState.fogPaintEnabled?"ON":"OFF"}</button>
-        </div>
-        <label class="label" style="margin-top:10px">Tamanho do quadrado</label>
-        <input id="fogSize" type="number" value="${fogBrush}" />
-        <div class="actions" style="margin-top:8px; flex-wrap:wrap">
-          <button class="secondary" id="fogModePaint">Modo: Pintar</button>
-          <button class="secondary" id="fogModeErase">Modo: Apagar</button>
-        </div>
-        <small style="color:var(--muted)">Players veem a fog como preto total.</small>
-      </div>
-    `;
-    body.querySelector("#postKeyBtn").onclick=()=>setPostImageKeyInteractive();
-    body.querySelector("#postKey").onchange=async ()=>{
-      const k = body.querySelector("#postKey").value.trim();
-      localStorage.setItem("sur4_postimage_key", k);
-      await dbUpdate(`rooms/${roomId}/settings`, { postimageKey: k });
-      toast("PostImage key salva na sala.","ok");
-    };
-    body.querySelector("#bgSave").onclick=async ()=>{ const url=clampLen(body.querySelector("#bgUrl").value.trim(),420); await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:url }); toast("Fundo salvo.","ok"); };
+        body.querySelector("#bgSave").onclick=async ()=>{ const url=clampLen(body.querySelector("#bgUrl").value.trim(),420); await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:url }); toast("Fundo salvo.","ok"); };
     body.querySelector("#bgClear").onclick=async ()=>{ await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl:"" }); toast("Fundo removido.","ok"); };
     body.querySelector("#bgUpload").onclick=async ()=>{
       try{
@@ -2006,3 +1840,70 @@ onAuth(async (user)=>{
     toast(String(e?.message||e),"error");
   }
 });
+if(tab==="fog"){
+  const fogEnabled = !!room?.settings?.fog?.enabled;
+  const size = Math.max(20, Math.min(800, fogBrush||80));
+  body.innerHTML = `
+    <div class="card pad">
+      <strong>Fog</strong>
+      <p style="margin:8px 0; color:var(--muted)">A fog apaga completamente para players. O mestre pinta quadrados no mapa.</p>
+
+      <div class="actions" style="gap:8px; flex-wrap:wrap; margin-top:10px">
+        <button class="secondary" id="fogToggle">${fogEnabled ? "Desativar fog" : "Ativar fog"}</button>
+        <button class="secondary" id="fogPaint">Pintar</button>
+        <button class="secondary" id="fogErase">Apagar</button>
+      </div>
+
+      <div class="actions" style="gap:8px; align-items:flex-end; margin-top:10px">
+        <div style="flex:1">
+          <small style="color:var(--muted)">Tamanho do quadrado</small>
+          <input id="fogSize" type="number" value="${size}" />
+        </div>
+        <button class="secondary" id="fogUse">Usar no mapa</button>
+        <button class="secondary" id="fogStop">Parar</button>
+      </div>
+
+      <div class="actions" style="margin-top:10px">
+        <button class="secondary" id="fogClear">Limpar tudo</button>
+      </div>
+
+      <small style="color:var(--muted)">Dica: clique em “Usar no mapa” e depois clique/arraste no mapa para pintar/apagar.</small>
+    </div>
+  `;
+
+  body.querySelector("#fogToggle").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    const cur = !!room?.settings?.fog?.enabled;
+    await dbUpdate(`rooms/${roomId}/settings/fog`, { enabled: !cur });
+    toast(!cur ? "Fog ativada." : "Fog desativada.","ok");
+  };
+
+  body.querySelector("#fogPaint").onclick=()=>{ fogMode="paint"; toast("Fog: pintar","info"); };
+  body.querySelector("#fogErase").onclick=()=>{ fogMode="erase"; toast("Fog: apagar","info"); };
+
+  body.querySelector("#fogSize").onchange=()=>{
+    fogBrush = Math.max(20, Math.min(800, num(body.querySelector("#fogSize").value, 80)));
+    toast("Tamanho atualizado.","ok");
+  };
+
+  body.querySelector("#fogUse").onclick=()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    toolsState.fogPaintEnabled=true;
+    toast("Modo fog ON: clique/arraste no mapa.","ok");
+  };
+
+  body.querySelector("#fogStop").onclick=()=>{
+    toolsState.fogPaintEnabled=false;
+    toast("Modo fog OFF.","info");
+  };
+
+  body.querySelector("#fogClear").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    if(!confirm("Limpar toda a fog da sala?")) return;
+    await dbSet(`rooms/${roomId}/settings/fog/blocks`, null);
+    toast("Fog limpa.","ok");
+  };
+
+  return;
+}
+
