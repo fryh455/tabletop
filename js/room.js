@@ -489,12 +489,23 @@ async function pushRoll(payload){
 }
 
 async function rollAttrInline(char, attr){
+  const mental=num(char.mental,0);
+  const mm=mentalMods(mental);
   const base=num(char.attrs?.[attr],1);
-  const pen=mentalPenalty(num(char.mental,0));
+  const pen=mentalPenalty(mental);
   const die=rollDice("normal").dice[0];
   const total=die+base+pen + mm.diceBonus;
-  await pushRoll({ userUid: me.uid, expression:`1d12+${base}${pen?pen:""}`, mode:"normal", dice:[die], picked:die, total,
-    context:{ roomId, charId:char.charId, kind:"attr", attr, label:`${attr}: ${total}`, baseAttr:base, mental:char.mental, penalty:pen }, visibility:"public", timestamp:Date.now() });
+  await pushRoll({
+    userUid: me.uid,
+    expression:`1d12+${base}${pen?pen:""}${mm.diceBonus?`+${mm.diceBonus}`:""}`,
+    mode:"normal",
+    dice:[die],
+    picked:die,
+    total,
+    context:{ roomId, charId:char.charId, kind:"attr", attr, label:`${attr}: ${total}`, baseAttr:base, mental:mental, penalty:pen, mentalBonus:mm.diceBonus },
+    visibility:"public",
+    timestamp:Date.now()
+  });
   toast(`${attr}: ${total}`, "ok");
 }
 async function rollItemInline(char, item){
@@ -661,6 +672,7 @@ const dtTorso = (VIG + FOR + 3) * 4;
 const dtArm = (VIG + 3) * 3;
 const dtLeg = (VIG + 3) * 3;
 const hpTotal = (dtHead + dtTorso + dtArm*2 + dtLeg*2) * 4;
+const hpCurrent = Math.min(hpTotal, Math.max(0, num(char.hpCurrent, hpTotal)));
 const invLimit = (FOR + VIG) * 4;
 const invUsed = (char.inventory||[]).reduce((s,it)=>s+num(it.kg,0),0);
 const invLeft = Math.max(0, invLimit - invUsed);
@@ -693,7 +705,15 @@ const invLeft = Math.max(0, invLimit - invUsed);
     <div class="item"><small>Intenções</small><div class="mono">${intentions}</div></div>
     <div class="item"><small>Movimento</small><div class="mono">${move} m/inten.</div></div>
     <div class="item"><small>Esquiva</small><div class="mono">${dodge}</div></div>
-    <div class="item"><small>HP Total</small><div class="mono">${hpTotal}</div></div>
+    <div class="item"><small>HP</small><div class="mono"><span id="hpNow">${hpCurrent}</span>/<span id="hpTot">${hpTotal}</span></div></div>
+
+<div class="actions" style="margin-top:10px; gap:8px; align-items:flex-end">
+  <div style="flex:1">
+    <small style="color:var(--muted)">Diminuir HP (dano)</small>
+    <input id="hpDmg" type="number" placeholder="ex: 12" />
+  </div>
+  <button id="hpApply" class="secondary">Aplicar</button>
+</div>
   </div>
   <div class="grid2" style="margin-top:10px">
     <div class="item"><small>DT Cabeça</small><div class="mono">${dtHead}</div></div>
@@ -740,6 +760,24 @@ const invLeft = Math.max(0, invLimit - invUsed);
   `;
 
   root.querySelectorAll("[data-attr]").forEach(el=> el.onclick = ()=> rollAttrInline(char, el.dataset.attr));
+
+  const hpBtn = root.querySelector("#hpApply");
+  if(hpBtn){
+    const canHp = isMaster() || isOwner;
+    hpBtn.style.display = canHp ? "inline-flex" : "none";
+    const hpInp = root.querySelector("#hpDmg");
+    if(!canHp && hpInp) hpInp.style.display="none";
+    hpBtn.onclick = async ()=>{
+      try{
+        const dmg = num(hpInp?.value,0);
+        if(dmg<=0) return toast("Digite um valor > 0.","error");
+        const cur = Math.min(hpTotal, Math.max(0, num(char.hpCurrent, hpTotal)));
+        const next = Math.max(0, cur - dmg);
+        await dbUpdate(`rooms/${roomId}/characters/${char.charId}`, { hpCurrent: next, updatedAt: Date.now() });
+        toast(`HP: ${next}/${hpTotal}`, "ok");
+      }catch(e){ toast(String(e?.message||e),"error"); }
+    };
+  }
 
   const invRoot=root.querySelector("#inv");
   invRoot.innerHTML = inv.length? "" : `<div class="item"><small>Sem itens.</small></div>`;
