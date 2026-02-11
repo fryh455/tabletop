@@ -24,17 +24,17 @@ let unsub=[];
 
 function clearSubs(){ unsub.forEach(fn=>fn&&fn()); unsub=[]; }
 function isMaster(){ return (me && room && room.masterUid===me.uid) || role==="master"; }
-function canEditToken(t){
+function canEditToken(tokenId, t){
   if(isMaster()) return true;
   if(t?.ownerUid && me && t.ownerUid===me.uid) return true;
   const myTok = players?.[me?.uid]?.tokenId;
-  return !!(myTok && t && t.tokenId===myTok);
+  return !!(myTok && tokenId && tokenId===myTok);
 }
-function canOpenSheet(t){
+function canOpenSheet(tokenId, t){
   if(isMaster()) return true;
   if(t?.ownerUid && me && t.ownerUid===me.uid) return true;
   const myTok = players?.[me?.uid]?.tokenId;
-  if(myTok && t && t.tokenId===myTok) return true;
+  if(myTok && tokenId && tokenId===myTok) return true;
   const myChar = players?.[me?.uid]?.characterId;
   return !!(myChar && t?.linkedCharId===myChar);
 }
@@ -310,7 +310,7 @@ function beginPointerAt(sx,sy){
   const hit=hitToken(w.x,w.y);
   selectedTokenId = hit?.id || null;
 
-  if(hit && canEditToken(hit.t)){
+  if(hit && canEditToken(hit.id, hit.t)){
     dragging={ id:hit.id, ox:w.x-num(hit.t.x,0), oy:w.y-num(hit.t.y,0) };
     pan=false;
   }else{
@@ -362,7 +362,7 @@ async function endPointerAt(sx,sy){
     const hit=hitToken(w.x,w.y);
     if(hit){
       // Always allow master; players only own token
-      if(canOpenSheet(hit.t)){
+      if(canOpenSheet(hit.id, hit.t)){
         openSheetWindow(hit.id, sx, sy).catch(()=>{});
       }else{
         // not clickable for sheet, but still selectable
@@ -412,7 +412,7 @@ canvas.addEventListener("click",(ev)=>{
     const w=screenToWorld(sx,sy);
     const hit=hitToken(w.x,w.y);
     if(hit){
-      if(canOpenSheet(hit.t)){
+      if(canOpenSheet(hit.id, hit.t)){
         openSheetWindow(hit.id, sx, sy).catch((e)=>toast(String(e?.message||e),"error"));
       }else{
         toast("Token detectado, mas sem permissão pra abrir ficha (owner/master).", "error");
@@ -426,7 +426,7 @@ canvas.addEventListener("mousemove",(ev)=>{
     const {sx,sy}=getScreenXY(ev);
     const w=screenToWorld(sx,sy);
     const hit=hitToken(w.x,w.y);
-    canvas.style.cursor = hit ? (canEditToken(hit.t) ? "grab" : (canOpenSheet(hit.t) ? "pointer" : "default")) : "default";
+    canvas.style.cursor = hit ? (canEditToken(hit.id, hit.t) ? "grab" : (canOpenSheet(hit.id, hit.t) ? "pointer" : "default")) : "default";
     setDbg(`role=${role} master=${isMaster()} tokens=${Object.keys(tokens||{}).length} sel=${selectedTokenId||'-'} hover=${hit?hit.id:'-'} clickW=${lastClickWorld.x.toFixed(1)},${lastClickWorld.y.toFixed(1)} zoom=${zoom.toFixed(2)}`);
   }catch(e){}
 },{passive:true});
