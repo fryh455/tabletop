@@ -1,7 +1,0 @@
-/* IDs: #map-canvas, #token-list */
-body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#071016;color:#eaf6ff}
-header{display:flex;justify-content:space-between;padding:12px;background:#071827}
-main{display:flex;padding:12px}
-#map-canvas{border:2px solid #123;background:#081217}
-#sidebar{margin-left:12px;width:320px}
-#token-list{margin-bottom:12px}
