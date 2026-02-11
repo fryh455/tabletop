@@ -1,3 +1,4 @@
+console.log("SUR4 BUILD v26");
 
 import { $, $$, bindModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
@@ -459,6 +460,21 @@ canvas.addEventListener("touchend",()=>{
 /* =================== Rolls helpers =================== */
 
 
+
+async function setPostImageKeyInteractive(){
+  const k = prompt("Cole sua PostImage API Key:");
+  if(!k) return;
+  const key = String(k).trim();
+  if(key.length<8) return toast("Key inválida.","error");
+  localStorage.setItem("sur4_postimage_key", key);
+  if(isMaster()){
+    await dbUpdate(`rooms/${roomId}/settings`, { postimageKey: key });
+    toast("PostImage key salva na sala (e no seu navegador).","ok");
+  }else{
+    toast("PostImage key salva no seu navegador.","ok");
+  }
+}
+
 function applyModOp(total, mod, op){
   const m = num(mod,0);
   const o = (op||"add");
@@ -547,7 +563,7 @@ async function rollItemInline(char, item){
 async function rollAdvInline(char, adv){
   const mental=num(char.mental,0);
   const mm=mentalMods(mental);
-  if(!isMaster() && advantagesDisabled(mental)){ toast("Vantagens desativadas (mental <= -11).", "error"); return; }
+  if(!isMaster() && (adv.kind!=="Desvantagem") && advantagesDisabled(mental)){ toast("Vantagens desativadas (mental <= -11).", "error"); return; }
   const a=(adv.attrUsed||"QI").toUpperCase();
   const base=num(char.attrs?.[a],1);
   const dt=Math.max(0, num(adv.dt, 9));
@@ -770,9 +786,9 @@ const invLeft = Math.max(0, invLimit - invUsed);
     hpBtn.onclick = async ()=>{
       try{
         const dmg = num(hpInp?.value,0);
-        if(dmg<=0) return toast("Digite um valor > 0.","error");
+        if(dmg===0) return toast("Digite um valor diferente de 0.","error");
         const cur = Math.min(hpTotal, Math.max(0, num(char.hpCurrent, hpTotal)));
-        const next = Math.max(0, cur - dmg);
+        const next = (dmg>0) ? Math.max(0, cur - dmg) : Math.min(hpTotal, cur + Math.abs(dmg));
         await dbUpdate(`rooms/${roomId}/characters/${char.charId}`, { hpCurrent: next, updatedAt: Date.now() });
         toast(`HP: ${next}/${hpTotal}`, "ok");
       }catch(e){ toast(String(e?.message||e),"error"); }
@@ -1684,6 +1700,7 @@ function syncToolsUI(){
         <button class="danger" id="btnDeleteRoom">Apagar mesa</button>
       </div>
     `;
+    body.querySelector("#postKeyBtn").onclick=()=>setPostImageKeyInteractive();
     body.querySelector("#postKey").onchange=async ()=>{
       const k = body.querySelector("#postKey").value.trim();
       localStorage.setItem("sur4_postimage_key", k);
