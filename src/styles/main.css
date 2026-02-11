@@ -1,0 +1,13 @@
+:root{--bg:#071226;--panel:#0b1220;--accent:#6ee7b7;--text:#e6eef6}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
+#header-bar{background:var(--panel);padding:12px;display:flex;justify-content:space-between;align-items:center}
+#layout{display:flex;min-height:calc(100vh - 60px)}
+#sidebar-left{width:260px;background:#071226;padding:12px}
+#main-area{flex:1;padding:12px;position:relative}
+canvas#map-canvas{width:100%;height:auto;border:1px solid #222;background:#0a0f14}
+.hidden{display:none}
+.modal{position:fixed;left:0;top:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+.modal .modal-content{background:#071726;color:#fff;padding:16px;border-radius:8px;min-width:280px}
+#character-sheet{position:absolute;right:12px;top:12px;background:#082232;padding:12px;border-radius:8px;max-width:360px}
+#token-inspector{position:absolute;left:12px;top:12px;background:#082232;padding:12px;border-radius:8px}
+#logs-panel{position:absolute;right:12px;bottom:12px;width:320px;background:#02111a;padding:8px;border-radius:8px;max-height:300px;overflow:auto}

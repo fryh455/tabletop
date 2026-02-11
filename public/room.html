@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SUR4 - Mesa</title>
+  <link rel="stylesheet" href="../src/styles/main.css">
+  <link rel="stylesheet" href="../src/styles/mobile.css">
+  <script type="module" src="../src/core/app.js" defer></script>
+</head>
+<body>
+  <header id="header-bar">
+    <div id="room-info">
+      <span id="room-name">Mesa</span>
+      <button id="btn-leave-room">Sair</button>
+    </div>
+  </header>
+  <div id="layout">
+    <aside id="sidebar-left"></aside>
+    <main id="main-area">
+      <canvas id="map-canvas" width="1280" height="720"></canvas>
+      <div id="ui-root">
+        <div id="character-sheet" class="hidden"></div>
+        <div id="token-inspector" class="hidden"></div>
+        <div id="roll-modal" class="modal hidden"></div>
+        <div id="intentions-board" class="hidden"></div>
+        <div id="logs-panel"></div>
+      </div>
+    </main>
+  </div>
+</body>
+</html>

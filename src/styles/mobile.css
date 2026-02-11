@@ -1,0 +1,6 @@
+@media (max-width:800px){
+  #sidebar-left{display:none}
+  canvas#map-canvas{height:480px}
+  #character-sheet{position:static;width:100%}
+  #token-inspector{position:static;width:100%}
+}

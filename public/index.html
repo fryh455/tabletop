@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>SUR4 - Entrar</title>
+  <link rel="stylesheet" href="../src/styles/main.css">
+  <script type="module" src="../src/core/app.js" defer></script>
+</head>
+<body>
+  <div id="app-root">
+    <header id="header-bar"><h1>SUR4</h1></header>
+    <main>
+      <section id="auth-section">
+        <form id="login-form">
+          <label>Email<input id="login-email" type="email" required /></label>
+          <label>Senha<input id="login-password" type="password" required /></label>
+          <div class="actions">
+            <button type="button" id="btn-login">Entrar</button>
+            <button type="button" id="btn-register">Registrar</button>
+          </div>
+        </form>
+      </section>
+      <section id="rooms-section" class="hidden">
+        <h2>Suas Mesas</h2>
+        <div id="rooms-list"></div>
+        <button id="btn-create-room">Criar Mesa</button>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

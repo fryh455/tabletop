@@ -1,0 +1,11 @@
+{
+  "project": "SUR4 Online Tabletop",
+  "type": "web-app",
+  "tech": [
+    "HTML5",
+    "CSS3",
+    "JavaScript ES2022",
+    "Firebase Realtime DB"
+  ],
+  "host": "GitHub Pages"
+}
