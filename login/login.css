@@ -1,7 +1,0 @@
-/* IDs: #btn-login, #btn-registrar */
-body{font-family:Arial,Helvetica,sans-serif;background:#0f1722;color:#e6eef8;display:flex;align-items:center;justify-content:center;height:100vh;margin:0}
-main{width:320px;padding:20px;background:#0b1220;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.6)}
-input{width:100%;padding:8px;margin:8px 0;border-radius:4px;border:1px solid #21303f;background:#07101a;color:#e6eef8}
-button{width:100%;padding:10px;margin-top:6px;border-radius:4px;border:none;background:#1f8cff;color:#fff;cursor:pointer}
-button:active{transform:translateY(1px)}
-h1,h2{margin:8px 0}
