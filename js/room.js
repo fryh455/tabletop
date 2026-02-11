@@ -1626,7 +1626,116 @@ if(tab==="room"){
     return;
   }
 
-  if(tab==="rolls"){
+  
+
+if(tab==="map"){
+  const bgUrl = room?.settings?.map?.bgUrl || "";
+  body.innerHTML = `
+    <div class="card pad">
+      <strong>Mapa</strong>
+      <p style="margin:8px 0; color:var(--muted)">Escolha a imagem de fundo do mapa (todos veem).</p>
+
+      <label class="label" style="margin-top:10px">Imagem do mapa (URL)</label>
+      <div class="actions" style="gap:8px">
+        <input id="bgUrl" style="flex:1" placeholder="https://..." value="${esc(bgUrl)}" />
+        <button class="secondary" id="bgSave">Salvar</button>
+      </div>
+
+      <div class="actions" style="margin-top:10px">
+        <input id="bgFile" type="file" accept="image/*" />
+        <button class="secondary" id="bgUpload">Upload</button>
+      </div>
+
+      <small style="color:var(--muted)">O upload pede PostImage key automaticamente se faltar.</small>
+    </div>
+  `;
+  body.querySelector("#bgSave").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    const u = body.querySelector("#bgUrl").value.trim();
+    await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: u });
+    toast("Mapa atualizado.","ok");
+  };
+  body.querySelector("#bgUpload").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    const f = body.querySelector("#bgFile").files?.[0];
+    if(!f) return toast("Escolha um arquivo.","error");
+    let key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
+    if(!key) key = await ensurePostImageKey();
+    const url = await uploadToPostImage(f, key);
+    await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: url });
+    toast("Mapa atualizado.","ok");
+  };
+  return;
+}
+
+if(tab==="fog"){
+  const fogEnabled = !!room?.settings?.fog?.enabled;
+  const size = Math.max(20, Math.min(800, fogBrush||80));
+  body.innerHTML = `
+    <div class="card pad">
+      <strong>Fog</strong>
+      <p style="margin:8px 0; color:var(--muted)">A fog apaga completamente para players. O mestre pinta quadrados no mapa.</p>
+
+      <div class="actions" style="gap:8px; flex-wrap:wrap; margin-top:10px">
+        <button class="secondary" id="fogToggle">${fogEnabled ? "Desativar fog" : "Ativar fog"}</button>
+        <button class="secondary" id="fogPaint">Pintar</button>
+        <button class="secondary" id="fogErase">Apagar</button>
+      </div>
+
+      <div class="actions" style="gap:8px; align-items:flex-end; margin-top:10px">
+        <div style="flex:1">
+          <small style="color:var(--muted)">Tamanho do quadrado</small>
+          <input id="fogSize" type="number" value="${size}" />
+        </div>
+        <button class="secondary" id="fogUse">Usar no mapa</button>
+        <button class="secondary" id="fogStop">Parar</button>
+      </div>
+
+      <div class="actions" style="margin-top:10px">
+        <button class="secondary" id="fogClear">Limpar tudo</button>
+      </div>
+
+      <small style="color:var(--muted)">Dica: clique em “Usar no mapa” e depois clique/arraste no mapa para pintar/apagar.</small>
+    </div>
+  `;
+
+  body.querySelector("#fogToggle").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    const cur = !!room?.settings?.fog?.enabled;
+    await dbUpdate(`rooms/${roomId}/settings/fog`, { enabled: !cur });
+    toast(!cur ? "Fog ativada." : "Fog desativada.","ok");
+  };
+
+  body.querySelector("#fogPaint").onclick=()=>{ fogMode="paint"; toast("Fog: pintar","info"); };
+  body.querySelector("#fogErase").onclick=()=>{ fogMode="erase"; toast("Fog: apagar","info"); };
+
+  body.querySelector("#fogSize").onchange=()=>{
+    fogBrush = Math.max(20, Math.min(800, num(body.querySelector("#fogSize").value, 80)));
+    toast("Tamanho atualizado.","ok");
+  };
+
+  body.querySelector("#fogUse").onclick=()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    toolsState.fogPaintEnabled=true;
+    toast("Modo fog ON: clique/arraste no mapa.","ok");
+  };
+
+  body.querySelector("#fogStop").onclick=()=>{
+    toolsState.fogPaintEnabled=false;
+    toast("Modo fog OFF.","info");
+  };
+
+  body.querySelector("#fogClear").onclick=async ()=>{
+    if(!isMaster()) return toast("Só o mestre.","error");
+    if(!confirm("Limpar toda a fog da sala?")) return;
+    await dbSet(`rooms/${roomId}/settings/fog/blocks`, null);
+    toast("Fog limpa.","ok");
+  };
+
+  return;
+}
+
+if(tab==="rolls"){
     const rows = Object.values(rolls||{}).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0)).slice(0,120);
     body.innerHTML = `
       <div class="card pad" style="margin-top:10px">
@@ -1840,70 +1949,4 @@ onAuth(async (user)=>{
     toast(String(e?.message||e),"error");
   }
 });
-if(tab==="fog"){
-  const fogEnabled = !!room?.settings?.fog?.enabled;
-  const size = Math.max(20, Math.min(800, fogBrush||80));
-  body.innerHTML = `
-    <div class="card pad">
-      <strong>Fog</strong>
-      <p style="margin:8px 0; color:var(--muted)">A fog apaga completamente para players. O mestre pinta quadrados no mapa.</p>
-
-      <div class="actions" style="gap:8px; flex-wrap:wrap; margin-top:10px">
-        <button class="secondary" id="fogToggle">${fogEnabled ? "Desativar fog" : "Ativar fog"}</button>
-        <button class="secondary" id="fogPaint">Pintar</button>
-        <button class="secondary" id="fogErase">Apagar</button>
-      </div>
-
-      <div class="actions" style="gap:8px; align-items:flex-end; margin-top:10px">
-        <div style="flex:1">
-          <small style="color:var(--muted)">Tamanho do quadrado</small>
-          <input id="fogSize" type="number" value="${size}" />
-        </div>
-        <button class="secondary" id="fogUse">Usar no mapa</button>
-        <button class="secondary" id="fogStop">Parar</button>
-      </div>
-
-      <div class="actions" style="margin-top:10px">
-        <button class="secondary" id="fogClear">Limpar tudo</button>
-      </div>
-
-      <small style="color:var(--muted)">Dica: clique em “Usar no mapa” e depois clique/arraste no mapa para pintar/apagar.</small>
-    </div>
-  `;
-
-  body.querySelector("#fogToggle").onclick=async ()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    const cur = !!room?.settings?.fog?.enabled;
-    await dbUpdate(`rooms/${roomId}/settings/fog`, { enabled: !cur });
-    toast(!cur ? "Fog ativada." : "Fog desativada.","ok");
-  };
-
-  body.querySelector("#fogPaint").onclick=()=>{ fogMode="paint"; toast("Fog: pintar","info"); };
-  body.querySelector("#fogErase").onclick=()=>{ fogMode="erase"; toast("Fog: apagar","info"); };
-
-  body.querySelector("#fogSize").onchange=()=>{
-    fogBrush = Math.max(20, Math.min(800, num(body.querySelector("#fogSize").value, 80)));
-    toast("Tamanho atualizado.","ok");
-  };
-
-  body.querySelector("#fogUse").onclick=()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    toolsState.fogPaintEnabled=true;
-    toast("Modo fog ON: clique/arraste no mapa.","ok");
-  };
-
-  body.querySelector("#fogStop").onclick=()=>{
-    toolsState.fogPaintEnabled=false;
-    toast("Modo fog OFF.","info");
-  };
-
-  body.querySelector("#fogClear").onclick=async ()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    if(!confirm("Limpar toda a fog da sala?")) return;
-    await dbSet(`rooms/${roomId}/settings/fog/blocks`, null);
-    toast("Fog limpa.","ok");
-  };
-
-  return;
-}
 
