@@ -689,7 +689,7 @@ function beginPointerAt(sx,sy){
   if(hit && canEditToken(hit.id, hit.t)){
     dragging={ id:hit.id, ox:w.x-num(hit.t.x,0), oy:w.y-num(hit.t.y,0) };
     pan=false;
-  else{
+  }else{
     dragging=null;
     pan=true;
   }
