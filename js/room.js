@@ -207,7 +207,7 @@ function _dataUrlToBlobUrl(dataUrl){
       const bin = atob(payload);
       bytes = new Uint8Array(bin.length);
       for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
-	else{
+    }else{
       // percent-decoded data section
       const str = decodeURIComponent(payloadRaw);
       bytes = new TextEncoder().encode(str);
