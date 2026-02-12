@@ -207,7 +207,7 @@ function _dataUrlToBlobUrl(dataUrl){
       const bin = atob(payload);
       bytes = new Uint8Array(bin.length);
       for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
-    }else{
+	else{
       // percent-decoded data section
       const str = decodeURIComponent(payloadRaw);
       bytes = new TextEncoder().encode(str);
@@ -689,7 +689,7 @@ function beginPointerAt(sx,sy){
   if(hit && canEditToken(hit.id, hit.t)){
     dragging={ id:hit.id, ox:w.x-num(hit.t.x,0), oy:w.y-num(hit.t.y,0) };
     pan=false;
-  }else{
+  else{
     dragging=null;
     pan=true;
   }
@@ -791,8 +791,7 @@ async function endPointerAt(sx,sy){
       mapRender();
       lastTap.time=0; lastTap.tokenId=null;
     }
-  }
-}else{
+  }else{
   // drag cancels any pending double click
   lastTap.time=0; lastTap.tokenId=null;
 }
