@@ -1,6 +1,6 @@
-/* SUR4 ROOM BUILD 45 */
+/* SUR4 ROOM BUILD 46 */
 /* SUR4 ROOM BUILD 41 */
-const BUILD_ID = 45;
+const BUILD_ID = 46;
 console.log("SUR4 BUILD v26");
 
 import { $, $$, bindModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
@@ -274,6 +274,7 @@ async function applyFogAt(wx, wy){
 
 /* =================== MAP INTERACTION =================== */
 let down=false, dragging=null, pan=true;
+let resizing=null; // token resize state (master only)
 let startPt={sx:0,sy:0};
 let last={sx:0,sy:0};
 let lastClickWorld={x:0,y:0};
@@ -2102,5 +2103,4 @@ function readFileAsDataURL(file){
     r.readAsDataURL(file);
   });
 }
-
 
