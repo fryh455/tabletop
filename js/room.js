@@ -373,6 +373,67 @@ function drawGrid(){
   ctx.restore();
 }
 
+function drawFog(){
+  const fog = room?.settings?.fog;
+  if(!fog?.enabled) return;
+  const blocks = fog.blocks || {};
+  ctx.save();
+  // Players should not see hidden content: draw near-opaque black.
+  // Master sees a lighter overlay.
+  ctx.fillStyle = isMaster() ? "rgba(0,0,0,.35)" : "rgba(0,0,0,.92)";
+  for(const b of Object.values(blocks)){
+    if(!b) continue;
+    const wx=num(b.x,0), wy=num(b.y,0);
+    const ww=num(b.w,0), hh=num(b.h,0);
+    const p=worldToScreen(wx,wy);
+    ctx.fillRect(p.x, p.y, ww*zoom*dpr, hh*zoom*dpr);
+  }
+  ctx.restore();
+}
+
+function drawMarkers(){
+  for(const [id,m] of Object.entries(markers||{})){
+    if(!m) continue;
+    const wx=num(m.x,0), wy=num(m.y,0);
+    const p=worldToScreen(wx,wy);
+    ctx.save();
+    ctx.globalAlpha = 0.95;
+    ctx.fillStyle = "rgba(255,214,102,.85)";
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, 10*dpr, 0, Math.PI*2);
+    ctx.fill();
+    const title=(m.title||"Marco").trim();
+    if(title){
+      ctx.font = `${12*dpr}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+      ctx.textAlign="center";
+      ctx.textBaseline="bottom";
+      ctx.fillStyle="rgba(0,0,0,.55)";
+      ctx.fillText(title, p.x+1*dpr, p.y-12*dpr+1*dpr);
+      ctx.fillStyle="rgba(255,255,255,.95)";
+      ctx.fillText(title, p.x, p.y-12*dpr);
+    }
+    ctx.restore();
+  }
+}
+
+// Main renderer. Named function (hoisted) so DB callbacks can call it safely.
+function mapRender(){
+  try{
+    if(!ctx) return;
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    drawBackground();
+    drawGrid();
+    drawMarkers();
+    drawTokens();
+    // Fog must render on top to hide content from players.
+    drawFog();
+  }catch(e){
+    // Never throw in render loop.
+  }
+}
+
 function drawTokens(){
   for(const [id,t] of Object.entries(tokens||{})){
     if(t && t.visible === false) continue;        // hidden tokens
@@ -411,7 +472,11 @@ function drawTokens(){
     }
 
     // optional tiny label
-    const name=(t.name||"").trim();
+    const rawName=(t.name||"").trim();
+    const ownerName = (t.ownerUid && players?.[t.ownerUid]?.nickname) ? String(players[t.ownerUid].nickname||"").trim() : "";
+    // If the saved token name looks like a UID (long random) use the player's nickname instead.
+    const looksLikeUid = rawName && rawName.length >= 16 && !/\s/.test(rawName);
+    const name = (looksLikeUid && ownerName) ? ownerName : (rawName || ownerName);
     if(name){
       ctx.globalAlpha = 1;
       ctx.font = `${12*dpr}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
@@ -1573,7 +1638,10 @@ function tokenOptionsForSheets(selectedId){
   return `<option value="">(nenhuma)</option>` + opts;
 }
 function playerOptions(selectedUid){
-  const opts = Object.values(players||{}).map(p=>`<option value="${p.uid}" ${p.uid===selectedUid?"selected":""}>${p.uid}</option>`).join("");
+  const opts = Object.values(players||{}).map(p=>{
+    const label = (p.nickname||p.name||"").trim() || p.uid;
+    return `<option value="${p.uid}" ${p.uid===selectedUid?"selected":""}>${esc(label)}</option>`;
+  }).join("");
   return `<option value="">(mestre)</option>` + opts;
 }
 
