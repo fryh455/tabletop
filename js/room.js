@@ -10,7 +10,6 @@ bindModal();
 const roomId = new URL(location.href).searchParams.get("room");
 // --- Token clipboard / ghosts (GM-only helpers) ---
 let tokenClipboard = null;       // { mode: "copy"|"cut", baseId, tokenData }
-let ghostTokens = [];            // [{id, baseId, tokenData}]
 let lastPointerWorld = {x:0,y:0};
 
 function cloneTokenData(t){
@@ -145,7 +144,7 @@ function subAll(){
   unsub.push(dbOn(`rooms/${roomId}`, (v)=>{ if(v){ room=v; setHeader(); mapRender(); syncToolsUI(); } }));
   unsub.push(dbOn(`rooms/${roomId}/players`, (v)=>{ players=v||{}; if(me) role = (room?.masterUid===me.uid) ? "master" : (players?.[me.uid]?.role || "player"); syncToolsUI(); }));
   unsub.push(dbOn(`rooms/${roomId}/tokens`, (v)=>{ tokens=v||{}; mapRender(); syncToolsUI(); }));
-  unsub.push(dbOn(`rooms/${roomId}/characters`, (v)=>{ characters=v||{}; syncToolsUI(); refreshOpenSheetIfNeeded(); }));
+  unsub.push(dbOn(`rooms/${roomId}/characters`, (v)=>{ characters=v||{}; syncToolsUI(); refreshOpenSheets(); }));
   unsub.push(dbOn(`rooms/${roomId}/markers`, (v)=>{ markers=v||{}; mapRender(); syncToolsUI(); }));
   unsub.push(dbOn(`rooms/${roomId}/rolls`, (v)=>{ rolls=v||{}; syncToolsUI(); }));
   unsub.push(dbOn(`logs/${roomId}`, (v)=>{ logs=v||{}; syncToolsUI(); }));
@@ -530,38 +529,7 @@ function drawTokens(){
 
     ctx.restore();
   }
-  // draw GM-only ghost tokens (visual duplicates)
-  if(isMaster() && ghostTokens.length){
-    for(const g of ghostTokens){
-      const t = g.tokenData;
-      if(!t) continue;
-      const wx=num(t.x,0), wy=num(t.y,0);
-      const r=24*(Number(t.scale)||1);
-      const s=worldToScreen(wx,wy);
-      const rr=r*zoom*dpr;
-
-      ctx.save();
-      // subtle highlight for ghosts
-      ctx.globalAlpha = 0.85;
-      if(t.spriteUrl){
-        const img=getImg(t.spriteUrl);
-        if(img && img.complete && img.naturalWidth>0){
-          const size = rr*2;
-          ctx.drawImage(img, (s.x*dpr)-rr, (s.y*dpr)-rr, size, size);
-        }else{
-          ctx.fillStyle="rgba(255,255,255,.10)";
-          ctx.fillRect((s.x*dpr)-rr, (s.y*dpr)-rr, rr*2, rr*2);
-        }
-      }else{
-        ctx.fillStyle="rgba(255,255,255,.10)";
-        ctx.fillRect((s.x*dpr)-rr, (s.y*dpr)-rr, rr*2, rr*2);
-      }
-      ctx.restore();
-    }
-  }
-}
-
-function hitToken(wx, wy){
+  function hitToken(wx, wy){
   let best=null;
   const entries = Object.entries(tokens||{})
     .filter(([id,t])=> !(t && t.visible===false) && !(t && t.inMarkerId))
@@ -570,17 +538,6 @@ function hitToken(wx, wy){
     const dx=wx-num(t.x,0), dy=wy-num(t.y,0);
     const r=24*(Number(t.scale)||1);
     if(dx*dx+dy*dy<=r*r) best={id,t};
-  }
-
-  // GM-only ghosts hit-test (treat as topmost)
-  if(isMaster() && ghostTokens.length){
-    for(const g of ghostTokens){
-      const t=g.tokenData;
-      if(!t) continue;
-      const dx=wx-num(t.x,0), dy=wy-num(t.y,0);
-      const r=24*(Number(t.scale)||1);
-      if(dx*dx+dy*dy<=r*r) best={id:g.id,t, ghost:true};
-    }
   }
   return best;
 }
@@ -1110,27 +1067,29 @@ function getCharByToken(tokenId){
 }
 
 /* =================== Sheet floating window =================== */
-let sheetWin=null;
-let sheetTokenId=null;
-let sheetCharId=null;
+let sheetWindows = []; // [{el, tokenId}]
 
-function ensureSheetWindow(){
-  if(sheetWin) return sheetWin;
+function _makeSheetWindowEl(){
   const el=document.createElement("div");
-  el.id="sheetWin";
+  el.className="sheetWin";
   el.style.cssText = `position:fixed; left:22px; top:92px; width:380px; max-width:92vw; z-index:55;
     background:rgba(15,20,32,.92); border:1px solid rgba(255,255,255,.08);
     border-radius:16px; box-shadow:0 18px 50px rgba(0,0,0,.45); display:none; overflow:hidden;`;
   el.innerHTML = `
-    <div id="swBar" style="cursor:move; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:rgba(255,255,255,.04);">
-      <strong id="swTitle" style="font-size:14px">Ficha</strong>
-      <div class="actions" style="gap:8px"><button class="secondary" id="swEditBase" style="padding:6px 10px; display:none">Editar ficha</button><button class="danger" id="swDel" style="padding:6px 10px; display:none">Apagar</button><button class="secondary" id="swClose" style="padding:6px 10px">Fechar</button></div>
+    <div class="swBar" style="cursor:move; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:rgba(255,255,255,.04);">
+      <strong class="swTitle" style="font-size:14px">Ficha</strong>
+      <div class="actions" style="gap:8px">
+        <button class="secondary swEditBase" style="padding:6px 10px; display:none">Editar ficha</button>
+        <button class="danger swDel" style="padding:6px 10px; display:none">Apagar</button>
+        <button class="secondary swClose" style="padding:6px 10px">Fechar</button>
+      </div>
     </div>
-    <div id="swBody" style="padding:12px; max-height:74vh; overflow:auto"></div>
+    <div class="swBody" style="padding:12px; max-height:74vh; overflow:auto"></div>
   `;
   document.body.appendChild(el);
 
-  const bar=el.querySelector("#swBar");
+  // drag
+  const bar=el.querySelector(".swBar");
   let drag=false, ox=0, oy=0;
   bar.addEventListener("mousedown",(e)=>{ drag=true; const r=el.getBoundingClientRect(); ox=e.clientX-r.left; oy=e.clientY-r.top; });
   window.addEventListener("mousemove",(e)=>{ if(!drag) return; el.style.left=Math.max(6,e.clientX-ox)+"px"; el.style.top=Math.max(6,e.clientY-oy)+"px"; });
@@ -1140,56 +1099,74 @@ function ensureSheetWindow(){
   window.addEventListener("touchmove",(e)=>{ if(!drag) return; const t=e.touches[0]; if(!t) return; el.style.left=Math.max(6,t.clientX-ox)+"px"; el.style.top=Math.max(6,t.clientY-oy)+"px"; },{passive:true});
   window.addEventListener("touchend",()=> drag=false,{passive:true});
 
-    el.querySelector("#swDel").onclick = async ()=>{ if(!sheetTokenId) return; const ch=getCharByToken(sheetTokenId); if(!ch) return; if(confirm("Apagar esta ficha?")){ await deleteCharacter(ch.charId); el.style.display="none"; sheetTokenId=null; } };
-el.querySelector("#swClose").onclick = ()=>{ el.style.display="none"; sheetTokenId=null; };
-  sheetWin=el;
   return el;
 }
 
-async function openSheetWindow(tokenId, sx=null, sy=null){
+function openSheetWindow(tokenId, sx=null, sy=null){
   const t=tokens?.[tokenId];
   if(!t) return;
   const char=getCharByToken(tokenId);
   if(!char){ toast("Token sem ficha.", "error"); return; }
-  sheetTokenId=tokenId;
-  sheetCharId = char?.charId || null;
-  const el=ensureSheetWindow();
+
+  const el=_makeSheetWindowEl();
+  el.dataset.tokenId = tokenId;
   el.style.display="block";
+  el.style.zIndex = String(55 + sheetWindows.length);
+
   if(sx!=null && sy!=null){
-    const px = sx/(dpr) + 14; // to CSS px
+    const px = sx/(dpr) + 14;
     const py = sy/(dpr) + 14;
     el.style.left = Math.min(window.innerWidth-40, Math.max(6, px)) + 'px';
     el.style.top  = Math.min(window.innerHeight-40, Math.max(6, py)) + 'px';
   }
 
-  el.querySelector("#swTitle").textContent = char.name || "Ficha";
-  const btnDel = el.querySelector("#swDel");
+  el.querySelector(".swTitle").textContent = char.name || "Ficha";
+  const btnDel = el.querySelector(".swDel");
   if(btnDel) btnDel.style.display = isMaster() ? "inline-flex" : "none";
-  const btnEdit = el.querySelector("#swEditBase");
+  const btnEdit = el.querySelector(".swEditBase");
   if(btnEdit){
     btnEdit.style.display = isMaster() ? "inline-flex" : "none";
-    btnEdit.onclick = ()=>{ const ch=getCharByToken(sheetTokenId); if(ch) openCharBaseEditor(ch); };
+    btnEdit.onclick = ()=>{ const ch=getCharByToken(tokenId); if(ch) openCharBaseEditor(ch); };
   }
-  renderSheetInto(el.querySelector("#swBody"), t, char);
+  if(btnDel){
+    btnDel.onclick = async ()=>{
+      const ch=getCharByToken(tokenId);
+      if(!ch) return;
+      if(confirm("Apagar esta ficha?")){
+        await deleteCharacter(ch.charId);
+        // close this window
+        const idx = sheetWindows.findIndex(w=>w.el===el);
+        if(idx>=0) sheetWindows.splice(idx,1);
+        el.remove();
+      }
+    };
+  }
+  el.querySelector(".swClose").onclick = ()=>{
+    const idx = sheetWindows.findIndex(w=>w.el===el);
+    if(idx>=0) sheetWindows.splice(idx,1);
+    el.remove();
+  };
+
+  sheetWindows.push({el, tokenId});
+
+  renderSheetInto(el.querySelector(".swBody"), t, char);
 }
 
-function refreshOpenSheetIfNeeded(){
-  if(!sheetTokenId) return;
-  const t=tokens?.[sheetTokenId];
-  const char=getCharByToken(sheetTokenId);
-  if(!t || !char) return;
-  const el=ensureSheetWindow();
-  if(el.style.display==="none") return;
-  el.querySelector("#swTitle").textContent = char.name || "Ficha";
-  renderSheetInto(el.querySelector("#swBody"), t, char);
+function refreshOpenSheets(){
+  if(!sheetWindows.length) return;
+  for(const w of [...sheetWindows]){
+    const tokenId = w.tokenId;
+    const t=tokens?.[tokenId];
+    const char=getCharByToken(tokenId);
+    if(!t || !char){
+      w.el?.remove();
+      sheetWindows = sheetWindows.filter(x=>x!==w);
+      continue;
+    }
+    w.el.querySelector(".swTitle").textContent = char.name || "Ficha";
+    renderSheetInto(w.el.querySelector(".swBody"), t, char);
+  }
 }
-
-function attrSelectHtml(id, selected){
-  const opts=["FOR","DEX","VIG","QI"].map(a=>`<option value="${a}" ${a===selected?"selected":""}>${a}</option>`).join("");
-  return `<select id="${id}">${opts}</select>`;
-}
-
-
 
 function renderSheetInto(root, token, char){
   const inv=char.inventory||[];
@@ -1734,15 +1711,6 @@ window.addEventListener("keydown",(e)=>{
   // delete/backspace: soft-hide token (keeps saved) OR remove ghost (visual)
   if(gm && (e.key==="Delete" || e.key==="Backspace")){
     if(!selectedTokenId) return;
-    // remove ghost token
-    const gi = ghostTokens.findIndex(g=>g.id===selectedTokenId);
-    if(gi>=0){
-      ghostTokens.splice(gi,1);
-      selectedTokenId=null;
-      mapRender();
-      e.preventDefault();
-      return;
-    }
     const t = tokens?.[selectedTokenId];
     if(t){
       // soft-hide by marking visible=false (keeps on DB)
@@ -1786,16 +1754,22 @@ window.addEventListener("keydown",(e)=>{
 
       const w = lastPointerWorld || {x:0,y:0};
 
-      if(tokenClipboard.mode==="copy"){
+            if(tokenClipboard.mode==="copy"){
         const src = tokenClipboard.tokenData;
         if(src){
-          const gId = "ghost_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,6);
-          const g = cloneTokenData(src);
-          g.x = w.x; g.y = w.y;
-          ghostTokens.push({ id:gId, baseId: tokenClipboard.baseId, tokenData:g });
-          selectedTokenId = gId;
-          mapRender();
-          toast("Colado (duplicata visual).");
+          const n = cloneTokenData(src);
+          // new token instance
+          delete n.id;
+          n.x = w.x; n.y = w.y;
+          n.visible = (n.visible!==false);
+          // push as real token in DB
+          dbPush(`rooms/${roomId}/tokens`, n).then((newId)=>{
+            if(newId){
+              selectedTokenId = newId;
+              toast("Token duplicado.");
+            }
+            mapRender();
+          }).catch(()=>{ toast("Falha ao duplicar token.","error"); });
         }
         e.preventDefault();
         return;
