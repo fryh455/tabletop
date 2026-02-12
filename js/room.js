@@ -1,6 +1,6 @@
-/* SUR4 ROOM BUILD 44 */
+/* SUR4 ROOM BUILD 45 */
 /* SUR4 ROOM BUILD 41 */
-const BUILD_ID = 44;
+const BUILD_ID = 45;
 console.log("SUR4 BUILD v26");
 
 import { $, $$, bindModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
@@ -95,6 +95,7 @@ let gridSize=48;
 const view={x:0,y:0};
 let selectedTokenId=null;
 
+let resizing=null;
 function resizeCanvas(){
   dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -1600,6 +1601,12 @@ async function openCreateSheet(){
   };
 }
 
+
+
+function getCharById(charId){
+  if(!charId) return null;
+  return (characters && characters[charId]) ? characters[charId] : null;
+}
 
 function syncToolsUI(){
   fab.style.display = isMaster() ? "block" : "none";
