@@ -60,11 +60,19 @@ async function ensureJoin(){
       const closeBtn = $("#modalClose");
       const back = $("#modalBack");
       const prevDisp = closeBtn ? closeBtn.style.display : "";
-      const blocker = (e)=>{ e.preventDefault(); e.stopImmediatePropagation(); };
+      // IMPORTANT: don't block clicks inside the modal content.
+      // Only block attempts to close by clicking the backdrop / close button.
+      const blockCloseBtn = (e)=>{ e.preventDefault(); e.stopImmediatePropagation(); };
+      const blockBackdropOnly = (e)=>{
+        if(e?.target && e.target.id === "modalBack"){
+          e.preventDefault();
+          e.stopImmediatePropagation();
+        }
+      };
 
       // Prevent closing while choosing nickname
-      closeBtn && closeBtn.addEventListener("click", blocker, true);
-      back && back.addEventListener("click", blocker, true);
+      closeBtn && closeBtn.addEventListener("click", blockCloseBtn, true);
+      back && back.addEventListener("click", blockBackdropOnly, true);
       if(closeBtn) closeBtn.style.display = "none";
 
       openModal("Seu nome", `
@@ -83,8 +91,8 @@ async function ensureJoin(){
 
       if(!ok){
         // Fallback: restore and resolve with empty (should not happen)
-        closeBtn && closeBtn.removeEventListener("click", blocker, true);
-        back && back.removeEventListener("click", blocker, true);
+        closeBtn && closeBtn.removeEventListener("click", blockCloseBtn, true);
+        back && back.removeEventListener("click", blockBackdropOnly, true);
         if(closeBtn) closeBtn.style.display = prevDisp;
         closeModal();
         resolve("");
@@ -97,8 +105,8 @@ async function ensureJoin(){
         await dbUpdate(`users/${me.uid}`, { nickname: nick, updatedAt: Date.now() });
 
         // Restore modal closers
-        closeBtn && closeBtn.removeEventListener("click", blocker, true);
-        back && back.removeEventListener("click", blocker, true);
+        closeBtn && closeBtn.removeEventListener("click", blockCloseBtn, true);
+        back && back.removeEventListener("click", blockBackdropOnly, true);
         if(closeBtn) closeBtn.style.display = prevDisp;
         closeModal();
         resolve(nick);
