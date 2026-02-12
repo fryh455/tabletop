@@ -22,8 +22,8 @@ Abra `index.html`.
    - adicione `localhost`
 3. Realtime Database: crie a RTDB e aplique as rules do arquivo `firebase.rules.json`
 
-## PostImage
-Para trocar sprite via upload, gere uma API key do PostImage e cole no painel Tokens (salva em localStorage).
+## Sprites (imagens)
+Use uma URL direta (http/https) ou carregue um arquivo para converter em DataURL/base64 no painel Tokens.
 
 ## Observações
 - Paths no GitHub Pages são relativos (./js/...).

@@ -274,6 +274,7 @@ async function applyFogAt(wx, wy){
   const path = `rooms/${roomId}/settings/fog/blocks/${key}`;
   if(fogMode==="paint") await dbSet(path, { x:sx, y:sy, w:size, h:size });
   else await dbSet(path, null);
+}
 
 async function createMarkerAt(wx, wy){
   if(!isMaster()) return;
