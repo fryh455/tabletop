@@ -42,7 +42,7 @@ function canOpenSheet(tokenId, t){
 function setHeader(){
   $("#roomTitle").textContent = room?.roomMeta?.name || "Sala";
   $("#roomSub").textContent = roomId || "";
-  $("#me").textContent = me ? `${meNick || me.email} (${uidShort(me.uid)})` : "";
+  $("#me").textContent = me ? `${meNick || me.email}` : "";
   $("#role").textContent = role.toUpperCase();
 }
 
@@ -54,6 +54,28 @@ async function ensureJoin(){
   // Load my profile (nickname)
   const prof = (await dbGet(`users/${me.uid}`)) || {};
   meNick = String(prof.nickname||"").trim();
+  if(!meNick || meNick.length<2){
+    // Ask once when entering a room
+    meNick = await new Promise((resolve)=>{
+      const id = bindModal("Seu nome", `
+        <p style="margin:0 0 8px 0; color:var(--muted)">Como você quer aparecer nesta mesa?</p>
+        <label class="label">Nome de usuário</label>
+        <input id="nick" placeholder="ex: Ana" maxlength="24" />
+        <div class="actions" style="margin-top:12px">
+          <button id="ok">Salvar</button>
+        </div>
+      `, { closable:false });
+      const root = document.getElementById(id);
+      root.querySelector("#ok").onclick = async ()=>{
+        const nick = clampLen(root.querySelector("#nick").value.trim(), 24);
+        if(nick.length<2){ toast("Nome muito curto.","error"); return; }
+        await dbUpdate(`users/${me.uid}`, { nickname: nick, updatedAt: Date.now() });
+        try{ document.getElementById(id).remove(); }catch(e){}
+        resolve(nick);
+      };
+    });
+  }
+
 
   role = (room.masterUid===me.uid) ? "master" : (room.players?.[me.uid]?.role || "player");
 
@@ -114,6 +136,51 @@ function worldToScreen(wx, wy){ return { x:(wx-view.x)*zoom*dpr, y:(wy-view.y)*z
 function screenToWorld(sx, sy){ return { x:sx/(zoom*dpr)+view.x, y:sy/(zoom*dpr)+view.y }; }
 
 const _imgCache = new Map();
+const _blobUrlCache = new Map(); // original dataURL -> blob URL
+
+function _dataUrlToBlobUrl(dataUrl){
+  if(_blobUrlCache.has(dataUrl)) return _blobUrlCache.get(dataUrl);
+  // data:[<mime>][;base64],<data>
+  const comma = dataUrl.indexOf(",");
+  if(comma < 0) return "";
+  const header = dataUrl.slice(5, comma); // after 'data:'
+  const payloadRaw = dataUrl.slice(comma+1);
+  const isB64 = /;base64/i.test(header);
+  const mime = (header.split(";")[0] || "application/octet-stream").trim() || "application/octet-stream";
+
+  try{
+    let bytes;
+    if(isB64){
+      let payload = payloadRaw.replace(/\s+/g, "");
+      // If base64 length not multiple of 4, pad it
+      const mod = payload.length % 4;
+      if(mod) payload += "=".repeat(4-mod);
+      // Guard against absurdly large payloads that can freeze UI
+      if(payload.length > 4_000_000) return "";
+      const bin = atob(payload);
+      bytes = new Uint8Array(bin.length);
+      for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
+    }else{
+      // percent-decoded data section
+      const str = decodeURIComponent(payloadRaw);
+      bytes = new TextEncoder().encode(str);
+    }
+    const blob = new Blob([bytes], { type: mime });
+    const url = URL.createObjectURL(blob);
+    _blobUrlCache.set(dataUrl, url);
+    return url;
+  }catch(e){
+    return "";
+  }
+}
+
+window.addEventListener("beforeunload", ()=>{
+  try{
+    for(const u of _blobUrlCache.values()) URL.revokeObjectURL(u);
+    _blobUrlCache.clear();
+  }catch(e){}
+});
+
 function _normalizeImageUrl(url){
   if(!url) return "";
   url = String(url).trim();
@@ -122,6 +189,9 @@ function _normalizeImageUrl(url){
   url = url.replace(/\s+/g, "");
 
   if(!url) return "";
+
+  // Guard huge DataURLs (can produce ERR_INVALID_URL / freeze)
+  if(url.startsWith("data:") && url.length > 2_500_000) return "";
 
   // Allow relative paths and http(s) urls as-is
   const isHttp = /^https?:\/\//i.test(url);
@@ -171,12 +241,18 @@ function _safeSetImgSrc(img, raw){
     try{ img.removeAttribute("src"); }catch(e){}
     return false;
   }
+  // Use blob URLs for base64 DataURLs to avoid ERR_INVALID_URL and reduce memory pressure
+  let srcToUse = norm;
+  if(norm.startsWith("data:image/") && /;base64,/i.test(norm)){
+    const blobUrl = _dataUrlToBlobUrl(norm);
+    if(blobUrl) srcToUse = blobUrl;
+  }
   img.onerror = ()=>{ try{ img.remove(); }catch(e){} };
-  try{ img.src = norm; }catch(e){ return false; }
+  try{ img.src = srcToUse; }catch(e){ return false; }
   return true;
 }
 
-function sanitizeImageUrlInput(raw){(raw){
+function sanitizeImageUrlInput(raw){
   const u = String(raw||"").trim();
   if(!u) return "";
   const norm = _normalizeImageUrl(u);
@@ -194,15 +270,26 @@ function hydrateInlineImages(root){
 function getImg(url){
   url=_normalizeImageUrl(url);
   if(!url) return null;
-  if(!_imgCache.has(url)){
+
+  // Use blob URLs for base64 DataURLs
+  let cacheKey = url;
+  let srcToUse = url;
+  if(url.startsWith("data:image/") && /;base64,/i.test(url)){
+    const blobUrl = _dataUrlToBlobUrl(url);
+    if(blobUrl){
+      cacheKey = blobUrl;
+      srcToUse = blobUrl;
+    }
+  }
+
+  if(!_imgCache.has(cacheKey)){
     const img=new Image();
     img.crossOrigin="anonymous";
     img.onerror = ()=>{ /* broken image */ };
-    // Avoid triggering browser ERR_INVALID_URL by only assigning validated URLs
-    try{ img.src=url; }catch(e){ return null; }
-    _imgCache.set(url,img);
+    try{ img.src=srcToUse; }catch(e){ return null; }
+    _imgCache.set(cacheKey,img);
   }
-  return _imgCache.get(url);
+  return _imgCache.get(cacheKey);
 }
 
 function drawBackground(){
