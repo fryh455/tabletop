@@ -1682,6 +1682,17 @@ async function openTokenEditor(tokenId){
     <label class="label" style="margin-top:10px">Imagem (sprite URL)</label>
     <input id="tSprite" value="${esc(t.spriteUrl||"")}" />
 
+    <div style="display:flex; gap:10px; margin-top:10px">
+      <div style="flex:1">
+        <label class="label">Tamanho (scale)</label>
+        <input id="tScale" type="number" step="0.05" min="0.1" value="${num(t.scale,1)}" />
+      </div>
+      <div style="flex:1">
+        <label class="label">Camada (z)</label>
+        <input id="tZ" type="number" step="1" value="${num(t.z,0)}" />
+      </div>
+    </div>
+
     <div class="actions" style="margin-top:10px">
       <input id="tFile" type="file" accept="image/*" />
       <button class="secondary" id="btnUp">Usar arquivo</button>
@@ -1721,6 +1732,8 @@ modal.querySelector("#tFile").onchange = ()=>{ modal.querySelector("#btnUp").cli
         name: clampLen(modal.querySelector("#tName").value, 60),
         // IMPORTANT: do not truncate Base64 DataURLs; it breaks token images (ERR_INVALID_URL).
         spriteUrl: clampImageUrl(modal.querySelector("#tSprite").value, 420),
+        scale: Math.max(0.1, num(modal.querySelector("#tScale").value, 1)),
+        z: Math.trunc(num(modal.querySelector("#tZ").value, 0)),
         updatedAt: Date.now(),
         inMarkerId: null,
         visible: true
