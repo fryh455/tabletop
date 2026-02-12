@@ -117,13 +117,45 @@ const _imgCache = new Map();
 function _normalizeImageUrl(url){
   if(!url) return "";
   url = String(url).trim();
+
+  // Remove whitespace/newlines that often break DataURLs
+  url = url.replace(/\s+/g, "");
+
   if(!url) return "";
-  if(url.startsWith("data:")){
-    if(!url.includes(",")) return "";
-    if(!/^data:image\//i.test(url)) return "";
+
+  // Fix common malformed base64 DataURL: "data:image/png;base64/AAAA" (missing comma)
+  if(url.startsWith("data:image/") && !url.includes(",")){
+    if(/;base64/i.test(url)){
+      url = url.replace(/;base64/i, ";base64,");
+    }
   }
+
+  if(url.startsWith("data:")){
+    if(!/^data:image\//i.test(url)) return "";
+    if(!url.includes(",")) return "";
+  }
+
   return url;
 }
+
+function sanitizeImageUrlInput(raw){
+  const u = String(raw||"").trim();
+  if(!u) return "";
+  const norm = _normalizeImageUrl(u);
+  if(!norm) throw new Error("Imagem inválida. Use URL (https://...) ou DataURL (data:image/...;base64,...)");
+  return norm;
+}
+
+function hydrateInlineImages(root){
+  root.querySelectorAll("img[data-src]").forEach(img=>{
+    const raw = img.getAttribute("data-src")||"";
+    const norm = _normalizeImageUrl(raw);
+    if(!norm){ img.remove(); return; }
+    img.onerror = ()=>{ img.remove(); };
+    img.src = norm;
+  });
+}
+
 function getImg(url){
   url=_normalizeImageUrl(url);
   if(!url) return null;
@@ -774,7 +806,7 @@ const invLeft = Math.max(0, invLimit - invUsed);
     <div class="item">
       <div style="display:flex;align-items:center;gap:10px">
         <div style="width:46px;height:46px;border-radius:12px;overflow:hidden;background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center">
-          ${token.spriteUrl?`<img src="${esc(token.spriteUrl)}" style="width:100%;height:100%;object-fit:cover" />`:`<span class="mono">SUR4</span>`}
+          ${token.spriteUrl?`<img data-src="${esc(token.spriteUrl)}" alt="" style="width:100%;height:100%;object-fit:cover" />`:`<span class="mono">SUR4</span>`}
         </div>
         <div style="flex:1">
           <strong>${esc(char.name||"Ficha")}</strong><br/>
@@ -851,6 +883,8 @@ const invLeft = Math.max(0, invLimit - invUsed);
       </div>
     </div>
   `;
+
+  hydrateInlineImages(root);
 
   root.querySelectorAll("[data-attr]").forEach(el=> el.onclick = ()=> rollAttrInline(char, el.dataset.attr));
 
@@ -1024,14 +1058,27 @@ function openItemEditor(char, idx){
     </div>
     <label class="label" style="margin-top:10px">Atributo usado</label>
     ${attrSelectHtml("at", (it.attrUsed||"FOR").toUpperCase())}
-    <div class="actions" style="margin-top:12px">
-      <button id="save">Salvar</button>
-      <button class="secondary" id="cancel">Cancelar</button>
+    <div class="actions" style="margin-top:12px; justify-content:space-between">
+      <button class="danger" id="delItem" style="${(idx==null || idx<0)?"display:none":""}">Apagar item</button>
+      <div class="actions" style="gap:8px">
+        <button id="save">Salvar</button>
+        <button class="secondary" id="cancel">Cancelar</button>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
   modal.querySelector("#cancel").onclick=()=>modal.remove();
-  modal.querySelector("#op").value = (a.op||"add");
+  const delBtn = modal.querySelector("#delItem");
+  if(delBtn) delBtn.onclick = async ()=>{
+    if(idx==null || idx<0) return;
+    if(!confirm(`Apagar o item "${(it.name||"Item")}"?`)) return;
+    try{
+      items.splice(idx,1);
+      await dbUpdate(`rooms/${roomId}/characters/${char.charId}`, { inventory: items, updatedAt: Date.now() });
+      toast("Item apagado.","ok");
+      modal.remove();
+    }catch(err){ toast(String(err?.message||err),"error"); }
+  };
   modal.querySelector("#save").onclick=async ()=>{
     it.name = clampLen(modal.querySelector("#nm").value, 60);
     it.desc = clampLen(modal.querySelector("#ds").value, 140);
@@ -1326,13 +1373,18 @@ async function openTokenEditor(tokenId){
       <button class="secondary" id="btnUp">Usar arquivo</button>
     </div>
 
-    <div class="actions" style="margin-top:12px">
-      <button id="save">Salvar</button>
-      <button class="secondary" id="cancel">Cancelar</button>
+    <div class="actions" style="margin-top:12px; justify-content:space-between">
+      <button class="danger" id="delToken">Apagar token</button>
+      <div class="actions" style="gap:8px">
+        <button id="save">Salvar</button>
+        <button class="secondary" id="cancel">Cancelar</button>
+      </div>
     </div>
   `;
   document.body.appendChild(modal);
   modal.querySelector("#cancel").onclick=()=>modal.remove();
+  const delBtn = modal.querySelector("#delToken");
+  if(delBtn) delBtn.onclick = async ()=>{ try{ await deleteToken(tokenId); modal.remove(); }catch(e){} };
   modal.querySelector("#btnUp").onclick = async ()=>{
   try{
     const file = modal.querySelector("#tFile")?.files?.[0];
@@ -1353,7 +1405,7 @@ modal.querySelector("#tFile").onchange = ()=>{ modal.querySelector("#btnUp").cli
         ownerUid: owner,
         linkedCharId: sheet,
         name: clampLen(modal.querySelector("#tName").value, 60),
-        spriteUrl: clampLen(modal.querySelector("#tSprite").value.trim(), 420),
+        spriteUrl: clampLen(sanitizeImageUrlInput(modal.querySelector("#tSprite").value), 420),
         updatedAt: Date.now(),
         inMarkerId: null,
         visible: true
@@ -1681,6 +1733,7 @@ function syncToolsUI(){
           <div class="actions" style="gap:6px; flex-wrap:wrap; justify-content:flex-end">
             <button class="secondary" data-open="${id}">Editar</button>
             <button class="secondary" data-sheet="${id}">Abrir ficha</button>
+            <button class="danger" data-del="${id}">Apagar</button>
           </div>
         `;
         list.appendChild(row);
@@ -1819,7 +1872,7 @@ function syncToolsUI(){
     const bgSave = body.querySelector("#bgSave");
     const bgUpload = body.querySelector("#bgUpload");
     if(bgSave) bgSave.onclick = async ()=>{
-      const u = (body.querySelector("#bgUrl")?.value||"").trim();
+      const u = sanitizeImageUrlInput((body.querySelector("#bgUrl")?.value||""));
       await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: u });
       toast("Mapa atualizado.","ok");
     };
