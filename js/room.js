@@ -2831,3 +2831,4 @@ function readFileAsDataURL(file){
     r.readAsDataURL(file);
   });
 }
+// EOF
