@@ -1,6 +1,6 @@
-/* SUR4 ROOM BUILD 65 */
-/* SUR4 ROOM BUILD 65 */
-const BUILD_ID = 65;
+/* SUR4 ROOM BUILD 66 */
+/* SUR4 ROOM BUILD 66 */
+const BUILD_ID = 66;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -1848,7 +1848,8 @@ window.addEventListener("keydown",(e)=>{
     if(id && id.startsWith("ghost_")) id = null;
     if(!id){
       // try player's controlled token
-      const my = (Object.entries(tokens||{}).find(([tid,t])=> (t?.ownerUid||"")===(auth?.currentUser?.uid||"")) || [null,null])[0];
+      const myUid = me?.uid || "";
+      const my = (Object.entries(tokens||{}).find(([tid,t])=> (t?.ownerUid||"")===myUid) || [null,null])[0];
       id = my;
     }
     if(id && tokens?.[id]){
@@ -1863,7 +1864,7 @@ window.addEventListener("keydown",(e)=>{
 
   // T: cycle tokens (GM: all visible; player: only controlled)
   if(e.key==="t" || e.key==="T"){
-    const uid = auth?.currentUser?.uid || "";
+    const uid = me?.uid || "";
     const list = Object.entries(tokens||{})
       .filter(([id,t])=> !(t && t.visible===false) && !(t && t.inMarkerId))
       .filter(([id,t])=> gm ? true : (t?.ownerUid||"")===uid)
@@ -2897,4 +2898,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 65 ===
+// === EOF marker: BUILD_ID 66 ===
