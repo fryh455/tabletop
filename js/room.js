@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 61 */
 /* SUR4 ROOM BUILD 61 */
-const BUILD_ID = 63;
+const BUILD_ID = 64;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -529,7 +529,9 @@ function drawTokens(){
 
     ctx.restore();
   }
-  function hitToken(wx, wy){
+}
+
+function hitToken(wx, wy){
   let best=null;
   const entries = Object.entries(tokens||{})
     .filter(([id,t])=> !(t && t.visible===false) && !(t && t.inMarkerId))
@@ -2838,4 +2840,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 63 ===
+// === EOF marker: BUILD_ID 64 ===
