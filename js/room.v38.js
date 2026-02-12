@@ -1,4 +1,3 @@
-const BUILD_ID = 39;
 console.log("SUR4 BUILD v26");
 
 import { $, $$, bindModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
