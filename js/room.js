@@ -1,6 +1,6 @@
-/* SUR4 ROOM BUILD 46 */
-/* SUR4 ROOM BUILD 41 */
-const BUILD_ID = 46;
+/* SUR4 ROOM BUILD 61 */
+/* SUR4 ROOM BUILD 61 */
+const BUILD_ID = 61;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -565,7 +565,9 @@ async function applyFogAt(wx, wy){
   const key = `b_${sx}_${sy}_${size}`;
   const path = `rooms/${roomId}/settings/fog/blocks/${key}`;
   if(fogMode==="paint") await dbSet(path, { x:sx, y:sy, w:size, h:size });
-  else await dbSet(path, null);
+  else {
+    await dbSet(path, null);
+  }
 }
 
 async function createMarkerAt(wx, wy){
@@ -1187,8 +1189,12 @@ const dtArm = (VIG + 3) * 3;
 const dtLeg = (VIG + 3) * 3;
 const hpTotal = (dtHead + dtTorso + dtArm*2 + dtLeg*2) * 4;
 // IMPORTANT: HP atual é por TOKEN (instância), para permitir vários NPCs compartilharem a mesma ficha-base.
-// Fallback: se o token não tiver hpCurrent, usa o valor salvo na ficha ou o total calculado.
-const hpCurrent = Math.min(hpTotal, Math.max(0, num(token?.hpCurrent, num(char.hpCurrent, hpTotal))));
+// Fallback: se o token não tiver hpCurrent, usa o HP total calculado (HP é por TOKEN).
+const hpCurrent = Math.min(hpTotal, Math.max(0, num(token?.hpCurrent, hpTotal)));
+if(!Number.isFinite(Number(token?.hpCurrent))){
+  // Inicializa HP atual por token (não compartilhar pela ficha base)
+  dbUpdate(`rooms/${roomId}/tokens/${tokenId}`, { hpCurrent, updatedAt: Date.now() }).catch(()=>{});
+}
 const invLimit = (FOR + VIG) * 4;
 const invUsed = (char.inventory||[]).reduce((s,it)=>s+num(it.kg,0),0);
 const invLeft = Math.max(0, invLimit - invUsed);
@@ -1289,7 +1295,7 @@ const invLeft = Math.max(0, invLimit - invUsed);
       try{
         const dmg = num(hpInp?.value,0);
         if(dmg===0) return toast("Digite um valor diferente de 0.","error");
-        const cur = Math.min(hpTotal, Math.max(0, num(token?.hpCurrent, num(char.hpCurrent, hpTotal))));
+        const cur = Math.min(hpTotal, Math.max(0, num(token?.hpCurrent, hpTotal)));
         const next = (dmg>0) ? Math.max(0, cur - dmg) : Math.min(hpTotal, cur + Math.abs(dmg));
         // salva no token (instância), não na ficha-base
         await dbUpdate(`rooms/${roomId}/tokens/${sheetTokenId||token?.tokenId}`, { hpCurrent: next, updatedAt: Date.now() });
@@ -2831,4 +2837,3 @@ function readFileAsDataURL(file){
     r.readAsDataURL(file);
   });
 }
-// EOF
