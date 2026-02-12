@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 61 */
 /* SUR4 ROOM BUILD 61 */
-const BUILD_ID = 62;
+const BUILD_ID = 63;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -2837,3 +2837,5 @@ function readFileAsDataURL(file){
     r.readAsDataURL(file);
   });
 }
+
+// === EOF marker: BUILD_ID 63 ===
