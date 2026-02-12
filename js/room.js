@@ -194,7 +194,7 @@ function _dataUrlToBlobUrl(dataUrl){
       const mod = payload.length % 4;
       if(mod) payload += "=".repeat(4-mod);
       // Guard against absurdly large payloads that can freeze UI
-      if(payload.length > 4_000_000) return "";
+      if(payload.length > 20_000_000) return "";
       const bin = atob(payload);
       bytes = new Uint8Array(bin.length);
       for(let i=0;i<bin.length;i++) bytes[i] = bin.charCodeAt(i);
@@ -678,7 +678,7 @@ async function endPointerAt(sx,sy){
   const dist = Math.sqrt(dx*dx+dy*dy);
 
   // Click / tap (sheet opens only on double-click / double-tap)
-if(dist <= 10){
+if(dist <= 20){
   const w=screenToWorld(sx,sy);
   const hit=hitToken(w.x,w.y);
   if(hit && canOpenSheet(hit.id, hit.t)){
@@ -738,7 +738,7 @@ canvas.addEventListener("pointercancel",()=>{
 },{passive:true});
 
 /* Fallback click: always try open sheet (desktop browsers that skip pointerup) */
-canvas.addEventListener("click",(ev)=>{
+canvas.addEventListener("dblclick",(ev)=>{
   try{
     const {sx,sy}=getScreenXY(ev);
     const w=screenToWorld(sx,sy);
@@ -2449,16 +2449,81 @@ async function openMarkerPopup(markerId){
     items.forEach((it, idx)=>{
       const div=document.createElement("div");
       div.className="item";
-      div.innerHTML = `<div class="actions" style="justify-content:space-between">
-        <div><strong>${esc(it.name||"Item")}</strong><br/><small>${esc((it.attrUsed||"FOR").toUpperCase())} + ${num(it.mod,0)} | ${num(it.kg,0)}kg</small></div>
-        <button class="danger" data-del="${idx}">Del</button>
+      div.innerHTML = `<div class="actions" style="justify-content:space-between; gap:10px">
+        <div style="flex:1; min-width:0; cursor:pointer" data-edit="${idx}">
+          <strong>${esc(it.name||"Item")}</strong><br/>
+          <small>${esc((it.attrUsed||"FOR").toUpperCase())} + ${num(it.mod,0)} | ${num(it.kg,0)}kg</small>
+        </div>
+        <div class="actions" style="gap:8px">
+          <button class="secondary" data-editbtn="${idx}">Editar</button>
+          <button class="danger" data-del="${idx}">Del</button>
+        </div>
       </div>`;
+      const open = ()=>openMarkerItemEditor(idx);
+      div.querySelector("[data-edit]").onclick = open;
+      div.querySelector("[data-editbtn]").onclick = open;
       div.querySelector("[data-del]").onclick=()=>{ items.splice(idx,1); renderItemList(); };
       root.appendChild(div);
     });
+  };  };
+
+
+  function openMarkerItemEditor(idx){
+    const base = (idx==null || idx<0) ? { id:`mk_it_${Date.now()}`, name:"Item", desc:"", kg:1, mod:0, attrUsed:"FOR" } : { ...(items[idx]||{}) };
+    const modal=document.createElement("div");
+    modal.style.cssText="position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:90; background:rgba(15,20,32,.97); border:1px solid rgba(255,255,255,.10); padding:14px; border-radius:16px; width:380px; max-width:92vw";
+    modal.innerHTML = `
+      <strong>${(idx==null || idx<0)?"Novo item do marco":"Editar item do marco"}</strong>
+      <label class="label" style="margin-top:10px">Nome</label>
+      <input id="nm" value="${esc(base.name||"")}" />
+      <label class="label" style="margin-top:10px">Descrição</label>
+      <input id="ds" value="${esc(base.desc||"")}" />
+      <div class="grid2" style="margin-top:10px">
+        <div>
+          <label class="label">Peso (kg)</label>
+          <input id="kg" type="number" value="${num(base.kg,0)}" />
+        </div>
+        <div>
+          <label class="label">Mod. dano</label>
+          <input id="md" type="number" value="${num(base.mod,0)}" />
+        </div>
+      </div>
+      <label class="label" style="margin-top:10px">Atributo usado</label>
+      ${attrSelectHtml("at", (base.attrUsed||"FOR").toUpperCase())}
+      <div class="actions" style="margin-top:12px; justify-content:space-between">
+        <button class="danger" id="delItem" style="${(idx==null || idx<0)?"display:none":""}">Apagar item</button>
+        <div class="actions" style="gap:8px">
+          <button id="saveIt">Salvar</button>
+          <button class="secondary" id="cancelIt">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+
+    modal.querySelector("#cancelIt").onclick=()=>modal.remove();
+    const delBtn=modal.querySelector("#delItem");
+    if(delBtn) delBtn.onclick=()=>{
+      if(idx==null || idx<0) return;
+      if(!confirm(`Apagar o item "${(base.name||"Item")}" do marco?`)) return;
+      items.splice(idx,1);
+      renderItemList();
+      modal.remove();
+    };
+    modal.querySelector("#saveIt").onclick=()=>{
+      base.name = clampLen(modal.querySelector("#nm").value, 60);
+      base.desc = clampLen(modal.querySelector("#ds").value, 140);
+      base.kg = num(modal.querySelector("#kg").value, 0);
+      base.mod = num(modal.querySelector("#md").value, 0);
+      base.attrUsed = (modal.querySelector("#at").value||"FOR").toUpperCase();
+      if(idx==null || idx<0) items.push(base);
+      else items[idx]=base;
+      renderItemList();
+      modal.remove();
+    };
   };
 
-  renderTokList(); renderItemList();
+
+    renderTokList(); renderItemList();
 
   box.querySelector("#close").onclick=()=>box.remove();
   box.querySelector("#jump").onclick=()=>{ view.x=num(m.x,0)-150; view.y=num(m.y,0)-150; mapRender(); };
@@ -2487,7 +2552,7 @@ async function openMarkerPopup(markerId){
     renderTokList();
   };
 
-  box.querySelector("#addItem").onclick=()=>{ items.push({ id:`mk_it_${Date.now()}`, name:"Item", desc:"", kg:1, mod:0, attrUsed:"FOR" }); renderItemList(); };
+  box.querySelector("#addItem").onclick=()=>{ openMarkerItemEditor(-1); };
 
   box.querySelector("#save").onclick=async ()=>{
     const patch = { title: clampLen(box.querySelector("#mkTitle").value, 80), tokenIds, items, updatedAt: Date.now() };
