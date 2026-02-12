@@ -1,13 +1,9 @@
 /* SUR4 ROOM BUILD 46 */
 /* SUR4 ROOM BUILD 41 */
 const BUILD_ID = 46;
-console.log("SUR4 BUILD v26");
-
 import { $, $$, bindModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
-import { uploadToPostImage } from "./postimage.js";
-
 initFirebase();
 bindModal();
 
@@ -46,7 +42,7 @@ function canOpenSheet(tokenId, t){
 function setHeader(){
   $("#roomTitle").textContent = room?.roomMeta?.name || "Sala";
   $("#roomSub").textContent = roomId || "";
-  $("#me").textContent = me ? `${me.email} (${uidShort(me.uid)})` : "";
+  $("#me").textContent = me ? `${meNick || me.email} (${uidShort(me.uid)})` : "";
   $("#role").textContent = role.toUpperCase();
 }
 
@@ -54,13 +50,23 @@ async function ensureJoin(){
   const r = await dbGet(`rooms/${roomId}`);
   if(!r) throw new Error("Sala não existe.");
   room = r;
+
+  // Load my profile (nickname)
+  const prof = (await dbGet(`users/${me.uid}`)) || {};
+  meNick = String(prof.nickname||"").trim();
+
   role = (room.masterUid===me.uid) ? "master" : (room.players?.[me.uid]?.role || "player");
+
+  const prev = room.players?.[me.uid] || {};
   await dbSet(`rooms/${roomId}/players/${me.uid}`, {
-    uid: me.uid, role, connected:true,
-    joinedAt: room.players?.[me.uid]?.joinedAt || Date.now(),
+    uid: me.uid,
+    nickname: meNick || prev.nickname || "",
+    role,
+    connected: true,
+    joinedAt: prev.joinedAt || Date.now(),
     lastSeenAt: Date.now(),
-    characterId: room.players?.[me.uid]?.characterId || null,
-    tokenId: room.players?.[me.uid]?.tokenId || null
+    characterId: prev.characterId || null,
+    tokenId: prev.tokenId || null
   });
   await dbUpdate(`users/${me.uid}/rooms`, { [roomId]: true });
 }
@@ -95,7 +101,6 @@ let gridSize=48;
 const view={x:0,y:0};
 let selectedTokenId=null;
 
-let resizing=null;
 function resizeCanvas(){
   dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -172,7 +177,7 @@ function drawTokens(){
       ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.fill();
     }
 
-    const editable = canEditToken(t);
+    const editable = canEditToken(id, t);
     ctx.strokeStyle = editable ? "#9aa4b244" : "#9aa4b222";
     ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.stroke();
@@ -269,6 +274,22 @@ async function applyFogAt(wx, wy){
   const path = `rooms/${roomId}/settings/fog/blocks/${key}`;
   if(fogMode==="paint") await dbSet(path, { x:sx, y:sy, w:size, h:size });
   else await dbSet(path, null);
+
+async function createMarkerAt(wx, wy){
+  if(!isMaster()) return;
+  const obj = {
+    title: "Marco",
+    x: num(wx, 0),
+    y: num(wy, 0),
+    tokenIds: [],
+    items: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now()
+  };
+  const markerId = await dbPush(`rooms/${roomId}/markers`, obj);
+  await dbUpdate(`rooms/${roomId}/markers/${markerId}`, { markerId });
+  await addLog("marker","Marco criado",{markerId});
+  toast("Marco criado. Clique nele para editar.","ok");
 }
 
 
@@ -410,7 +431,7 @@ async function endPointerAt(sx,sy){
         openSheetWindow(hit.id, sx, sy).catch(()=>{});
       }else{
         // not clickable for sheet, but still selectable
-        toast("Token não é seu (sem permissão de ficha).", "error");
+        // player without permission: ignore click
       }
     }
   }
@@ -475,6 +496,18 @@ canvas.addEventListener("mousemove",(ev)=>{
   }catch(e){}
 },{passive:true});
 
+// Right-click (master): create a marker at cursor
+canvas.addEventListener("contextmenu",(ev)=>{
+  if(!isMaster()) return;
+  ev.preventDefault();
+  try{
+    const {sx,sy}=getScreenXY(ev);
+    const w=screenToWorld(sx,sy);
+    createMarkerAt(w.x,w.y).catch(err=>toast(String(err?.message||err),"error"));
+  }catch(e){ /* ignore */ }
+});
+
+
 canvas.addEventListener("wheel",(e)=>{
   e.preventDefault();
   const delta=Math.sign(e.deltaY);
@@ -505,33 +538,6 @@ canvas.addEventListener("touchend",()=>{
 
 
 
-async function ensurePostImageKey(){
-  let key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
-  if(key && key.trim().length>=8) return key.trim();
-  const k = prompt("Para enviar imagens, cole sua Imagens (Base64/DataURL):");
-  if(!k) throw new Error("Imagens (Base64/DataURL) ausente.");
-  const kk = String(k).trim();
-  if(kk.length<8) throw new Error("Imagens (Base64/DataURL) inválida.");
-  localStorage.setItem("sur4_postimage_key", kk);
-  if(isMaster()){
-    await dbUpdate(`rooms/${roomId}/settings`, { postimageKey: kk });
-  }
-  return kk;
-}
-
-async function setPostImageKeyInteractive(){
-  const k = prompt("Cole sua Imagens (Base64/DataURL):");
-  if(!k) return;
-  const key = String(k).trim();
-  if(key.length<8) return toast("Key inválida.","error");
-  localStorage.setItem("sur4_postimage_key", key);
-  if(isMaster()){
-    await dbUpdate(`rooms/${roomId}/settings`, { postimageKey: key });
-    toast("PostImage key salva na sala (e no seu navegador).","ok");
-  }else{
-    toast("PostImage key salva no seu navegador.","ok");
-  }
-}
 
 function applyModOp(total, m, op){
   const mod = Number(m)||0;
@@ -1211,6 +1217,7 @@ function ensureToolsPopup(){
       <button class="secondary" data-tab="room">Mesa</button>
       <button class="secondary" data-tab="rolls">Rolagens</button>
       <button class="secondary" data-tab="logs">Logs</button>
+      <button class="secondary" data-tab="data">Outros Dados</button>
     </div>
     <div id="mtBody" style="padding:12px; padding-top:0; max-height:74vh; overflow:auto"></div>
   `;
@@ -1268,7 +1275,6 @@ async function createToken(){
 async function openTokenEditor(tokenId){
   const t=tokens?.[tokenId];
   if(!t) return;
-  let apiKey = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
   const modal=document.createElement("div");
   modal.style.cssText="position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); z-index:80; background:rgba(15,20,32,.97); border:1px solid rgba(255,255,255,.10); padding:14px; border-radius:16px; width:380px; max-width:92vw";
   modal.innerHTML = `
@@ -1287,7 +1293,7 @@ async function openTokenEditor(tokenId){
 
     <div class="actions" style="margin-top:10px">
       <input id="tFile" type="file" accept="image/*" />
-      <button class="secondary" id="btnUp">Upload</button>
+      <button class="secondary" id="btnUp">Usar arquivo</button>
     </div>
 
     <div class="actions" style="margin-top:12px">
@@ -1299,14 +1305,13 @@ async function openTokenEditor(tokenId){
   modal.querySelector("#cancel").onclick=()=>modal.remove();
   modal.querySelector("#btnUp").onclick = async ()=>{
   try{
-    const file=modal.querySelector("#tFile").files?.[0];
+    const file = modal.querySelector("#tFile")?.files?.[0];
     if(!file) throw new Error("Escolha um arquivo.");
-    const url=await uploadToPostImage(file, apiKey);
-    modal.querySelector("#tSprite").value=url;
-    await dbPush("images", { url, ownerUid: me.uid, source:"postimage", createdAt: Date.now(), meta:{ name:file.name, kind:"tokenSprite", tokenId } });
-    await dbUpdate(`rooms/${roomId}/tokens/${tokenId}`, { spriteUrl: url, updatedAt: Date.now() });
-    toast("Sprite salvo no token.","ok");
-  }catch(e){ toast(String(e?.message||e),"error"); }
+    const dataUrl = await readFileAsDataURL(file);
+    // Store directly (DataURL/base64) to keep GitHub Pages static & avoid external upload services.
+    modal.querySelector("#tSprite").value = dataUrl;
+    toast("Imagem carregada (Base64).","ok");
+  }catch(err){ toast(String(err?.message||err),"error"); }
 };
 modal.querySelector("#tFile").onchange = ()=>{ modal.querySelector("#btnUp").click(); };
   modal.querySelector("#save").onclick = async ()=>{
@@ -1930,6 +1935,30 @@ function syncToolsUI(){
         list.appendChild(div);
       });
     }
+    return;
+  }
+
+
+  // ---------- OUTROS DADOS ----------
+  if(tab==="data"){
+    const summary = {
+      roomId,
+      roomName: room?.roomMeta?.name || "",
+      masterUid: room?.masterUid || "",
+      players: Object.keys(players||{}).length,
+      tokens: Object.keys(tokens||{}).length,
+      fichas: Object.keys(characters||{}).length,
+      marcos: Object.keys(markers||{}).length,
+      rolls: Object.keys(rolls||{}).length,
+      logs: Object.keys(logs||{}).length
+    };
+    body.innerHTML = `
+      <div class="card pad">
+        <strong>Outros dados</strong>
+        <p style="margin:8px 0; color:var(--muted)">Resumo e diagnóstico (somente leitura).</p>
+        <pre style="white-space:pre-wrap; word-break:break-word; background:rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.08); padding:10px; border-radius:12px;">${esc(JSON.stringify(summary, null, 2))}</pre>
+      </div>
+    `;
     return;
   }
 

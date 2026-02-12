@@ -1,4 +1,3 @@
-console.log("SUR4 BUILD v26");
 import { $, bindModal, toast, goRoom, uidShort, clampLen } from "./app.js";
 import { initFirebase, onAuth, register, login, logout, dbGet, dbSet, dbUpdate, dbPush } from "./firebase.js";
 
