@@ -1,6 +1,6 @@
-/* SUR4 ROOM BUILD 61 */
-/* SUR4 ROOM BUILD 61 */
-const BUILD_ID = 64;
+/* SUR4 ROOM BUILD 65 */
+/* SUR4 ROOM BUILD 65 */
+const BUILD_ID = 65;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -27,7 +27,7 @@ let me=null;
 let meNick="";
 let role="player";
 let room=null;
-let players={}, tokens={}, characters={}, rolls={}, logs={}, markers={};
+let players={}, tokens={}, characters={}, rolls={}, logs={}, markers={}, advCounts={};
 let unsub=[];
 
 function clearSubs(){ unsub.forEach(fn=>fn&&fn()); unsub=[]; }
@@ -146,6 +146,7 @@ function subAll(){
   unsub.push(dbOn(`rooms/${roomId}/tokens`, (v)=>{ tokens=v||{}; mapRender(); syncToolsUI(); }));
   unsub.push(dbOn(`rooms/${roomId}/characters`, (v)=>{ characters=v||{}; syncToolsUI(); refreshOpenSheets(); }));
   unsub.push(dbOn(`rooms/${roomId}/markers`, (v)=>{ markers=v||{}; mapRender(); syncToolsUI(); }));
+  unsub.push(dbOn(`rooms/${roomId}/advCounts`, (v)=>{ advCounts=v||{}; if(isMaster()) refreshOpenSheets(); }));
   unsub.push(dbOn(`rooms/${roomId}/rolls`, (v)=>{ rolls=v||{}; syncToolsUI(); }));
   unsub.push(dbOn(`logs/${roomId}`, (v)=>{ logs=v||{}; syncToolsUI(); }));
 }
@@ -167,6 +168,34 @@ let dpr=1;
 let zoom=1;
 let gridSize=48;
 const view={x:0,y:0};
+
+function getViewportWorldSize(){
+  return { w: canvas.width/(zoom*dpr), h: canvas.height/(zoom*dpr) };
+}
+function getMapWorldSize(){
+  let mw = num(room?.settings?.map?.w, 0);
+  let mh = num(room?.settings?.map?.h, 0);
+  if(mw>0 && mh>0) return {w:mw,h:mh};
+  const bgUrl = room?.settings?.map?.bgUrl || "";
+  const img = bgUrl ? getImg(bgUrl) : null;
+  if(img && img.complete && img.naturalWidth && img.naturalHeight) return { w: img.naturalWidth, h: img.naturalHeight };
+  return { w: 4000, h: 3000 };
+}
+function clampView(){
+  const vp = getViewportWorldSize();
+  const ms = getMapWorldSize();
+  if(ms.w <= vp.w) view.x = (ms.w - vp.w)/2;
+  else view.x = Math.max(0, Math.min(ms.w - vp.w, view.x));
+  if(ms.h <= vp.h) view.y = (ms.h - vp.h)/2;
+  else view.y = Math.max(0, Math.min(ms.h - vp.h, view.y));
+}
+function centerViewOn(wx, wy){
+  const vp = getViewportWorldSize();
+  view.x = num(wx,0) - vp.w/2;
+  view.y = num(wy,0) - vp.h/2;
+  clampView();
+}
+
 let selectedTokenId=null;
 
 function resizeCanvas(){
@@ -174,6 +203,7 @@ function resizeCanvas(){
   const rect = canvas.getBoundingClientRect();
   canvas.width = Math.floor(rect.width * dpr);
   canvas.height = Math.floor(rect.height * dpr);
+  clampView();
   mapRender();
 }
 window.addEventListener("resize", resizeCanvas, { passive:true });
@@ -360,8 +390,9 @@ function drawBackground(){
   if(!img || !img.complete || !img.naturalWidth) return;
   ctx.save();
   const p=worldToScreen(0,0);
-  const w = img.naturalWidth * zoom * dpr;
-  const h = img.naturalHeight * zoom * dpr;
+  const ms = getMapWorldSize();
+  const w = ms.w * zoom * dpr;
+  const h = ms.h * zoom * dpr;
   ctx.globalAlpha = 0.92;
   try{ ctx.drawImage(img, p.x, p.y, w, h); }catch(e){ /* ignore broken */ }
   ctx.restore();
@@ -683,6 +714,7 @@ function movePointerAt(sx,sy){
   }else if(pan){
     view.x -= (sx-last.sx)/(zoom*dpr);
     view.y -= (sy-last.sy)/(zoom*dpr);
+    clampView();
     last={sx,sy};
     mapRender();
   }
@@ -837,6 +869,7 @@ canvas.addEventListener("wheel",(e)=>{
   const delta=Math.sign(e.deltaY);
   zoom = Math.max(0.02, Math.min(6.0, zoom + (delta>0?-0.1:0.1)));
   if(isMaster()) dbUpdate(`rooms/${roomId}/settings/map`, { zoom }).catch(()=>{});
+  clampView();
   mapRender();
 },{passive:false});
 
@@ -1064,6 +1097,17 @@ async function rollAdvDTInline(adv){
   });
   toast(`DT ${name}: 1d12(${die}) = ${die}`, "ok");
 }
+
+async function bumpAdvCount(charId, advId){
+  if(!isMaster()) return;
+  if(!charId || !advId) return;
+  const path = `rooms/${roomId}/advCounts/${charId}/${advId}`;
+  try{
+    const cur = num(await dbGet(path), 0);
+    await dbSet(path, cur + 1);
+  }catch(e){ /* ignore */ }
+}
+
 function getCharByToken(tokenId){
   const t=tokens?.[tokenId];
   if(!t?.linkedCharId) return null;
@@ -1153,7 +1197,7 @@ function openSheetWindow(tokenId, sx=null, sy=null){
 
   sheetWindows.push({el, tokenId});
 
-  renderSheetInto(el.querySelector(".swBody"), t, char);
+  renderSheetInto(el.querySelector(".swBody"), t, char, tokenId);
 }
 
 function refreshOpenSheets(){
@@ -1172,7 +1216,7 @@ function refreshOpenSheets(){
   }
 }
 
-function renderSheetInto(root, token, char){
+function renderSheetInto(root, token, char, tokenId){
   const inv=char.inventory||[];
   const advs=char.advantages||[];
   const disads=char.disadvantages||[];
@@ -1334,7 +1378,7 @@ const invLeft = Math.max(0, invLimit - invUsed);
     div.innerHTML = `
       <div class="kv">
         <div>
-          <strong style="cursor:pointer" data-adv="${idx}">${esc(a.name||"Vantagem")}</strong><br/>
+          <strong style="cursor:pointer" data-adv="${idx}">${esc(a.name||"Vantagem")}</strong>${isMaster() ? (()=>{ const c=num(advCounts?.[char.charId]?.[(a.id||String(idx))],0); return c?` <span class="mono" style="font-size:12px; opacity:.85">(x${c})</span>`:""; })() : ""}<br/>
           <small>${esc(a.type||"")}</small><br/>
           <small style="color:var(--muted)">${esc(a.desc||"")}</small>
         </div>
@@ -1345,7 +1389,7 @@ const invLeft = Math.max(0, invLimit - invUsed);
         </div>
       </div>
     `;
-    div.querySelector("[data-adv]").onclick = (ev)=>{ ev.stopPropagation(); rollAdvInline(char, advs[idx]); };
+    div.querySelector("[data-adv]").onclick = (ev)=>{ ev.stopPropagation(); if(isMaster()) bumpAdvCount(char.charId, (advs[idx]?.id||String(idx))); rollAdvInline(char, advs[idx]); };
     div.querySelector("[data-dt]").onclick  = (ev)=>{ ev.stopPropagation(); rollAdvDTInline(advs[idx]); };
     advRoot.appendChild(div);
   });
@@ -1808,10 +1852,9 @@ window.addEventListener("keydown",(e)=>{
       id = my;
     }
     if(id && tokens?.[id]){
-      view.x = num(tokens[id].x,0);
-      view.y = num(tokens[id].y,0);
+      centerViewOn(tokens[id].x, tokens[id].y);
     }else{
-      view.x = 0; view.y = 0;
+      centerViewOn(0,0);
     }
     mapRender();
     e.preventDefault();
@@ -1831,8 +1874,7 @@ window.addEventListener("keydown",(e)=>{
       const curIdx = selectedTokenId ? list.indexOf(selectedTokenId) : -1;
       const next = list[(curIdx+1) % list.length];
       selectedTokenId = next;
-      view.x = num(tokens[next].x,0);
-      view.y = num(tokens[next].y,0);
+      centerViewOn(tokens[next].x, tokens[next].y);
       mapRender();
     }
     e.preventDefault();
@@ -2423,6 +2465,21 @@ function syncToolsUI(){
         </div>
 
         <small style="color:var(--muted)">Dica: prefira imagens leves (Base64 pesa mais).</small>
+        <div class="grid2" style="margin-top:12px">
+          <div>
+            <label class="label">Largura do mapa (px mundo)</label>
+            <input id="mapW" type="number" min="200" step="50" value="${num(room?.settings?.map?.w, 0) || ""}" placeholder="(auto)" />
+          </div>
+          <div>
+            <label class="label">Altura do mapa (px mundo)</label>
+            <input id="mapH" type="number" min="200" step="50" value="${num(room?.settings?.map?.h, 0) || ""}" placeholder="(auto)" />
+          </div>
+        </div>
+        <div class="actions" style="margin-top:10px; gap:8px; flex-wrap:wrap">
+          <button class="secondary" id="mapSizeSave">Salvar tamanho</button>
+          <button class="secondary" id="mapSizeAuto">Auto (pela imagem)</button>
+        </div>
+
       </div>
     `;
     const bgSave = body.querySelector("#bgSave");
@@ -2840,4 +2897,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 64 ===
+// === EOF marker: BUILD_ID 65 ===
