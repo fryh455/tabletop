@@ -2465,7 +2465,7 @@ async function openMarkerPopup(markerId){
       div.querySelector("[data-del]").onclick=()=>{ items.splice(idx,1); renderItemList(); };
       root.appendChild(div);
     });
-  };  };
+  };
 
 
   function openMarkerItemEditor(idx){
@@ -2560,7 +2560,7 @@ async function openMarkerPopup(markerId){
     toast("Marco salvo.","ok");
     box.remove();
   };
-
+}
 
 /* =================== CSS tweaks for fullscreen canvas =================== */
 (function injectStyle(){
