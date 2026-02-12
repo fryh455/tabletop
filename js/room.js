@@ -1,7 +1,7 @@
 /* SUR4 ROOM BUILD 46 */
 /* SUR4 ROOM BUILD 41 */
 const BUILD_ID = 46;
-import { $, $$, bindModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
+import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
 initFirebase();
@@ -57,20 +57,50 @@ async function ensureJoin(){
   if(!meNick || meNick.length<2){
     // Ask once when entering a room
     meNick = await new Promise((resolve)=>{
-      const id = bindModal("Seu nome", `
+      const closeBtn = $("#modalClose");
+      const back = $("#modalBack");
+      const prevDisp = closeBtn ? closeBtn.style.display : "";
+      const blocker = (e)=>{ e.preventDefault(); e.stopImmediatePropagation(); };
+
+      // Prevent closing while choosing nickname
+      closeBtn && closeBtn.addEventListener("click", blocker, true);
+      back && back.addEventListener("click", blocker, true);
+      if(closeBtn) closeBtn.style.display = "none";
+
+      openModal("Seu nome", `
         <p style="margin:0 0 8px 0; color:var(--muted)">Como você quer aparecer nesta mesa?</p>
         <label class="label">Nome de usuário</label>
         <input id="nick" placeholder="ex: Ana" maxlength="24" />
         <div class="actions" style="margin-top:12px">
           <button id="ok">Salvar</button>
         </div>
-      `, { closable:false });
-      const root = document.getElementById(id);
-      root.querySelector("#ok").onclick = async ()=>{
-        const nick = clampLen(root.querySelector("#nick").value.trim(), 24);
+      `);
+
+      const body = $("#modalBody");
+      const inp = body ? body.querySelector("#nick") : null;
+      const ok = body ? body.querySelector("#ok") : null;
+      setTimeout(()=>inp && inp.focus(), 0);
+
+      if(!ok){
+        // Fallback: restore and resolve with empty (should not happen)
+        closeBtn && closeBtn.removeEventListener("click", blocker, true);
+        back && back.removeEventListener("click", blocker, true);
+        if(closeBtn) closeBtn.style.display = prevDisp;
+        closeModal();
+        resolve("");
+        return;
+      }
+
+      ok.onclick = async ()=>{
+        const nick = clampLen(((inp && inp.value) || "").trim(), 24);
         if(nick.length<2){ toast("Nome muito curto.","error"); return; }
         await dbUpdate(`users/${me.uid}`, { nickname: nick, updatedAt: Date.now() });
-        try{ document.getElementById(id).remove(); }catch(e){}
+
+        // Restore modal closers
+        closeBtn && closeBtn.removeEventListener("click", blocker, true);
+        back && back.removeEventListener("click", blocker, true);
+        if(closeBtn) closeBtn.style.display = prevDisp;
+        closeModal();
         resolve(nick);
       };
     });
@@ -730,6 +760,19 @@ function mentalMods(mental){
 function mentalPenalty(mental){ return (mental<=-8) ? -5 : 0; }
 function advantagesDisabled(mental){ return mental<=-11; }
 
+function fmtSigned(n){ const v=Number(n)||0; return (v>=0?`+${v}`:`${v}`); }
+function fmtPart(label, v){ const n=Number(v)||0; return `${label} (${fmtSigned(n)})`; }
+function joinParts(parts){
+  // parts: [{label,value}]
+  const kept = (parts||[]).filter(p=>Number.isFinite(Number(p.value)) && Number(p.value)!==0);
+  if(!kept.length) return "sem modificadores";
+  return kept.map(p=>fmtPart(p.label,p.value)).join(" + ");
+}
+function calcParts(parts){
+  return (parts||[]).reduce((acc,p)=>acc + (Number(p.value)||0), 0);
+}
+
+
 async function pushRoll(payload){
   const clean = JSON.parse(JSON.stringify(payload||{}));
   await dbPush(`rooms/${roomId}/rolls`, clean);
@@ -742,19 +785,28 @@ async function rollAttrInline(char, attr){
   const base=num(char.attrs?.[attr],1);
   const pen=mentalPenalty(mental);
   const die=rollDice("normal").dice[0];
-  const total=die+base+pen + mm.diceBonus;
+
+  const parts = [
+    { label: attr, value: base },
+    { label: "Mental", value: pen },
+    { label: "Bônus mental", value: mm.diceBonus }
+  ];
+  const modsTotal = calcParts(parts);
+  const total = die + modsTotal;
+
+  const breakdown = joinParts(parts);
   await pushRoll({
     userUid: me.uid,
-    expression:`1d12+${base}${pen?pen:""}${mm.diceBonus?`+${mm.diceBonus}`:""}`,
+    expression:`1d12(${die}) + ${breakdown} = ${total}`,
     mode:"normal",
     dice:[die],
     picked:die,
     total,
-    context:{ roomId, charId:char.charId, kind:"attr", attr, label:`${attr}: ${total}`, baseAttr:base, mental:mental, penalty:pen, mentalBonus:mm.diceBonus },
+    context:{ roomId, charId:char.charId, kind:"attr", attr, label:`${attr}: 1d12(${die}) + ${breakdown} = ${total}`, mods: parts, mental },
     visibility:"public",
     timestamp:Date.now()
   });
-  toast(`${attr}: ${total}`, "ok");
+  toast(`Rolagem ${attr}: 1d12(${die}) + ${breakdown} = ${total}`, "ok");
 }
 async function rollItemInline(char, item){
   const mental=num(char.mental,0);
@@ -765,54 +817,128 @@ async function rollItemInline(char, item){
   const pen=mentalPenalty(mental);
   const die=rollDice("normal").dice[0];
 
-  let total = die + base + pen + mm.diceBonus;
-  total = applyModOp(total, modVal, item.op);
+  // soma de modificadores (antes da operação do item)
+  const addParts = [
+    { label: a, value: base },
+    { label: "Mental", value: pen },
+    { label: "Bônus mental", value: mm.diceBonus }
+  ];
+  const preTotal = die + calcParts(addParts);
 
-  // expression shows + or × depending on op
-  const expr = `1d12+${base}${(item.op==="mul")?`×${modVal}`:`+${modVal}`}${pen?pen:""}`;
+  // aplica operação do item sem alterar dados da ficha
+  let total = preTotal;
+  if((item.op||"add")==="mul"){
+    total = Math.floor(total * (Number(modVal)||0));
+  } else {
+    total = total + (Number(modVal)||0);
+  }
 
-  const id = await pushRoll({
+  const breakdown = joinParts(addParts);
+  const opLabel = (item.op==="mul") ? `×${Number(modVal)||0}` : fmtSigned(Number(modVal)||0);
+
+  const cleanName = item.name || item.nome || "Item";
+  await pushRoll({
+    userUid: me.uid,
+    expression:`1d12(${die}) + ${breakdown} ${item.op==="mul" ? ` ${opLabel}` : ` + Item ${cleanName} (${opLabel})`} = ${total}`,
+    mode:"normal",
+    dice:[die],
+    picked:die,
+    total,
+    context:{ roomId, charId:char.charId, kind:"item", itemId:item.id, name:cleanName, attrUsed:a, mod:modVal, op:(item.op||"add"),
+      label:`Item ${cleanName}: 1d12(${die}) + ${breakdown} ${item.op==="mul" ? ` ${opLabel}` : ` + Item ${cleanName} (${opLabel})`} = ${total}`,
+      mods: addParts, itemMod: modVal, mental
+    },
+    visibility:"public",
+    timestamp:Date.now()
+  });
+
+  // reflexo mental -12 (somente loga; não altera ficha automaticamente)
+  if(mental<=-12){
+    const recoil = Math.max(0, total*2);
+    await addLog("mental","REFLEXO (-12): dano de volta", { amount: recoil, source: "mental-12", kind: "recoil" });
+    toast(`Mental -12: reflexo registrado (${recoil}).`,"error");
+  }
+
+  toast(`Rolagem item ${cleanName}: 1d12(${die}) + ${breakdown} ${item.op==="mul" ? ` ${opLabel}` : ` + Item (${opLabel})`} = ${total}`, "ok");
+}
+async function rollAdvInline(char, adv){
+  const mental=num(char.mental,0);
+  const mm=mentalMods(mental);
+
+  if(!isMaster() && (adv.kind!=="Desvantagem") && advantagesDisabled(mental)){
+    toast("Vantagens desativadas (mental <= -11).", "error");
+    return;
+  }
+
+  const a=(adv.attrUsed||"QI").toUpperCase();
+  const base=num(char.attrs?.[a],1);
+  const dtBase=Math.max(0, num(adv.dt, 9));
+  const dt = dtBase + (mm.dtTestBonus||0);
+
+  const pen=mentalPenalty(mental);
+  const die=rollDice("normal").dice[0];
+  const modRaw = num(adv.mod,0);
+
+  const addParts = [
+    { label: a, value: base },
+    { label: "Mental", value: pen },
+    { label: "Bônus mental", value: mm.diceBonus }
+  ];
+  const preTotal = die + calcParts(addParts);
+
+  let total = preTotal;
+  let opLabel = "";
+  if(modRaw!==0){
+    if((adv.op||"add")==="mul"){
+      total = Math.floor(total * (Number(modRaw)||0));
+      opLabel = `×${Number(modRaw)||0}`;
+    } else {
+      total = total + (Number(modRaw)||0);
+      opLabel = fmtSigned(Number(modRaw)||0);
+    }
+  }
+
+  const success=total>=dt;
+  const breakdown = joinParts(addParts);
+  const advName = adv.name || adv.nome || "Vantagem";
+  const kind = adv.kind || "Vantagem";
+
+  const expr = `1d12(${die}) + ${breakdown}${opLabel?` ${((adv.op||"add")==="mul")?opLabel:` + ${kind} ${advName} (${opLabel})`}`:""} vs DT ${dt}`;
+  await pushRoll({
     userUid: me.uid,
     expression: expr,
     mode:"normal",
     dice:[die],
     picked:die,
     total,
-    context:{ roomId, charId:char.charId, kind:"item", itemId:item.id, name:item.name, attrUsed:a, mod:modVal, op:(item.op||"add"), label:`Item ${item.name}: ${total}`, mental, penalty:pen },
+    context:{
+      roomId, charId:char.charId, kind:kind, advId:adv.id, name:advName,
+      type:(adv.type||adv.kind||""), attrUsed:a, dt, mod:modRaw, op:(adv.op||"add"),
+      success,
+      label:`${kind} ${advName}: ${success?"SUCESSO":"FALHA"} | ${expr} | total ${total}`,
+      mods:addParts, mental
+    },
     visibility:"public",
     timestamp:Date.now()
   });
 
-  // reflexo mental -12
-  if(mental<=-12){
-    const recoil = Math.max(0, total*2);
-    await addLog("mental","REFLEXO (-12): dano de volta", { amount: recoil, source: "mental-12", kind: "recoil", rollId: id });
-    toast(`Mental -12: você sofre ${recoil} de dano de volta (registrado).`,"error");
-  }
-
-  toast(`Item ${item.name}: ${total}`, "ok");
-}
-async function rollAdvInline(char, adv){
-  const mental=num(char.mental,0);
-  const mm=mentalMods(mental);
-  if(!isMaster() && (adv.kind!=="Desvantagem") && advantagesDisabled(mental)){ toast("Vantagens desativadas (mental <= -11).", "error"); return; }
-  const a=(adv.attrUsed||"QI").toUpperCase();
-  const base=num(char.attrs?.[a],1);
-  const dt=Math.max(0, num(adv.dt, 9));
-  const pen=mentalPenalty(mental);
-  const die=rollDice("normal").dice[0];  const modRaw = num(adv.mod,0);
-  let total = die + base + pen + mm.diceBonus;
-  if(modRaw!==0){ total = applyModOp(total, modRaw, adv.op); }
-  const success=total>=dt;
-  await pushRoll({ userUid: me.uid, expression:`TEST 1d12+${base}${(adv.op==="mul"&&modRaw>0)?`×${modRaw}`:`+${Math.max(0,num(adv.mod,0))}`}${pen?pen:""} vs ${dt}`, mode:"normal", dice:[die], picked:die, total,
-    context:{ roomId, charId:char.charId, kind:adv.kind||"adv", advId:adv.id, name:adv.name, type:(adv.type||adv.kind||""), attrUsed:a, dt, mod:Math.max(0,num(adv.mod,0)), op:(adv.op||"add"), success, label:`${(adv.kind||"Vantagem")} ${adv.name}: ${success?"SUCESSO":"FALHA"} (${total} vs ${dt})`, mental, penalty:pen }, visibility:"public", timestamp:Date.now() });
-  toast(`Vantagem ${adv.name}: ${success?"SUCESSO":"FALHA"} (${total} vs ${dt})`, success?"ok":"error");
+  toast(`${kind} ${advName}: ${success?"SUCESSO":"FALHA"} | ${expr} | total ${total}`, success?"ok":"error");
 }
 async function rollAdvDTInline(adv){
   const die=rollDice("normal").dice[0];
-  await pushRoll({ userUid: me.uid, expression:`DT 1d12`, mode:"normal", dice:[die], picked:die, total:die,
-    context:{ roomId, kind:"dt", advId:adv.id, name:adv.name, label:`DT ${adv.name}: ${die}` }, visibility:"public", timestamp:Date.now() });
-  toast(`DT ${adv.name}: ${die}`, "ok");
+  const name = adv?.name || adv?.nome || "DT";
+  await pushRoll({
+    userUid: me.uid,
+    expression:`DT 1d12(${die})`,
+    mode:"normal",
+    dice:[die],
+    picked:die,
+    total:die,
+    context:{ roomId, kind:"dt", advId:adv.id, name, label:`DT ${name}: 1d12(${die}) = ${die}` },
+    visibility:"public",
+    timestamp:Date.now()
+  });
+  toast(`DT ${name}: 1d12(${die}) = ${die}`, "ok");
 }
 function getCharByToken(tokenId){
   const t=tokens?.[tokenId];
