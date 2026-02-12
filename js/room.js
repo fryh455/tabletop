@@ -123,22 +123,60 @@ function _normalizeImageUrl(url){
 
   if(!url) return "";
 
-  // Fix common malformed base64 DataURL: "data:image/png;base64/AAAA" (missing comma)
-  if(url.startsWith("data:image/") && !url.includes(",")){
-    if(/;base64/i.test(url)){
+  // Allow relative paths and http(s) urls as-is
+  const isHttp = /^https?:\/\//i.test(url);
+  const isRel  = /^\.{0,2}\//.test(url) || url.startsWith("/");
+  const isData = url.startsWith("data:");
+
+  if(isData){
+    // Only images
+    if(!/^data:image\//i.test(url)) return "";
+
+    // Heuristics for common broken base64 separators
+    // 1) "data:image/png;base64/AAAA" -> comma
+    url = url.replace(/;base64\//i, ";base64,");
+    // 2) missing comma after ;base64
+    if(/;base64/i.test(url) && !/;base64,/.test(url)){
       url = url.replace(/;base64/i, ";base64,");
     }
+    // 3) rare truncations like ";bas..." -> treat as base64 marker
+    if(/;bas/i.test(url) && !/;base64,/.test(url) && !url.includes(",")){
+      url = url.replace(/;bas[^,]*/i, ";base64,");
+    }
+
+    // Must have comma separator and payload
+    const comma = url.indexOf(",");
+    if(comma<0) return "";
+    const payload = url.slice(comma+1);
+    if(!payload || payload.length<8) return "";
+
+    // If declared base64, validate characters loosely (avoid ERR_INVALID_URL)
+    if(/;base64,/i.test(url)){
+      if(!/^[A-Za-z0-9+/=]+$/.test(payload)) return "";
+    }
+
+    return url;
   }
 
-  if(url.startsWith("data:")){
-    if(!/^data:image\//i.test(url)) return "";
-    if(!url.includes(",")) return "";
+  if(isHttp || isRel){
+    return url;
   }
 
-  return url;
+  return "";
 }
 
-function sanitizeImageUrlInput(raw){
+function _safeSetImgSrc(img, raw){
+  const norm = _normalizeImageUrl(raw);
+  if(!norm){
+    try{ img.removeAttribute("src"); }catch(e){}
+    return false;
+  }
+  img.onerror = ()=>{ try{ img.remove(); }catch(e){} };
+  try{ img.src = norm; }catch(e){ return false; }
+  return true;
+}
+
+function sanitizeImageUrlInput(raw){(raw){
   const u = String(raw||"").trim();
   if(!u) return "";
   const norm = _normalizeImageUrl(u);
@@ -149,10 +187,7 @@ function sanitizeImageUrlInput(raw){
 function hydrateInlineImages(root){
   root.querySelectorAll("img[data-src]").forEach(img=>{
     const raw = img.getAttribute("data-src")||"";
-    const norm = _normalizeImageUrl(raw);
-    if(!norm){ img.remove(); return; }
-    img.onerror = ()=>{ img.remove(); };
-    img.src = norm;
+    if(!_safeSetImgSrc(img, raw)){ try{ img.remove(); }catch(e){} }
   });
 }
 
@@ -163,6 +198,7 @@ function getImg(url){
     const img=new Image();
     img.crossOrigin="anonymous";
     img.onerror = ()=>{ /* broken image */ };
+    // Avoid triggering browser ERR_INVALID_URL by only assigning validated URLs
     try{ img.src=url; }catch(e){ return null; }
     _imgCache.set(url,img);
   }
@@ -1135,13 +1171,11 @@ function openAdvEditor(char, idx){
   `;
   document.body.appendChild(modal);
   modal.querySelector("#cancel").onclick=()=>modal.remove();
-  modal.querySelector("#op").value = (a.op||"add");
   modal.querySelector("#save").onclick=async ()=>{
     a.name = clampLen(modal.querySelector("#nm").value, 60);
     a.desc = clampLen(modal.querySelector("#ds").value, 220);
     a.mod  = num(modal.querySelector("#md").value, 0);
     a.dt   = num(modal.querySelector("#dt").value, 9);
-    a.op   = (modal.querySelector("#op").value||"add");
     a.attrUsed = (modal.querySelector("#at").value||"QI").toUpperCase();
     if(idx==null || idx<0) advs.push(a); else advs[idx]=a;
     await dbUpdate(`rooms/${roomId}/characters/${char.charId}`, { advantages: advs, updatedAt: Date.now() });
@@ -1192,13 +1226,11 @@ function openDisEditor(char, idx){
   `;
   document.body.appendChild(modal);
   modal.querySelector("#cancel").onclick=()=>modal.remove();
-  modal.querySelector("#op").value = (a.op||"add");
   modal.querySelector("#save").onclick=async ()=>{
     a.name = clampLen(modal.querySelector("#nm").value, 60);
     a.desc = clampLen(modal.querySelector("#ds").value, 220);
     a.mod  = num(modal.querySelector("#md").value, 0);
     a.dt   = num(modal.querySelector("#dt").value, 9);
-    a.op   = (modal.querySelector("#op").value||"add");
     a.attrUsed = (modal.querySelector("#at").value||"QI").toUpperCase();
     if(idx==null || idx<0) dis.push(a); else dis[idx]=a;
     await dbUpdate(`rooms/${roomId}/characters/${char.charId}`, { disadvantages: dis, updatedAt: Date.now() });
@@ -1235,7 +1267,6 @@ function openCharBaseEditor(char){
   `;
   document.body.appendChild(modal);
   modal.querySelector("#cancel").onclick=()=>modal.remove();
-  modal.querySelector("#op").value = (a.op||"add");
   modal.querySelector("#save").onclick=async ()=>{
     const next={
       name: clampLen(modal.querySelector("#nm").value||"Ficha", 80),
@@ -1872,9 +1903,11 @@ function syncToolsUI(){
     const bgSave = body.querySelector("#bgSave");
     const bgUpload = body.querySelector("#bgUpload");
     if(bgSave) bgSave.onclick = async ()=>{
-      const u = sanitizeImageUrlInput((body.querySelector("#bgUrl")?.value||""));
-      await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: u });
-      toast("Mapa atualizado.","ok");
+      try{
+        const u = sanitizeImageUrlInput((body.querySelector("#bgUrl")?.value||""));
+        await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: u });
+        toast("Mapa atualizado.","ok");
+      }catch(e){ toast(String(e?.message||e),"error"); }
     };
     if(bgUpload) bgUpload.onclick = async ()=>{
       const f = body.querySelector("#bgFile")?.files?.[0];
@@ -2216,4 +2249,3 @@ function readFileAsDataURL(file){
     r.readAsDataURL(file);
   });
 }
-
