@@ -283,7 +283,9 @@ function _safeSetImgSrc(img, raw){
   let srcToUse = norm;
   if(norm.startsWith("data:image/") && /;base64,/i.test(norm)){
     const blobUrl = _dataUrlToBlobUrl(norm);
-    if(blobUrl) srcToUse = blobUrl;
+    // If we cannot create a Blob URL, do NOT fall back to the raw DataURL (avoids ERR_INVALID_URL)
+    if(!blobUrl) return false;
+    srcToUse = blobUrl;
   }
   img.onerror = ()=>{ try{ img.remove(); }catch(e){} };
   try{ img.src = srcToUse; }catch(e){ return false; }
@@ -296,6 +298,18 @@ function sanitizeImageUrlInput(raw){
   const norm = _normalizeImageUrl(u);
   if(!norm) throw new Error("Imagem inválida. Use URL (https://...) ou DataURL (data:image/...;base64,...)");
   return norm;
+}
+
+// Base64 DataURLs can be very long. Truncating them makes the URL invalid and breaks token/sheet images.
+// For normal URLs, we keep them reasonably short. For DataURLs, we keep the full value (with a hard safety cap).
+function clampImageUrl(raw, normalMax=420, dataUrlMax=4_500_000){
+  const norm = sanitizeImageUrlInput(raw);
+  if(!norm) return "";
+  if(norm.startsWith("data:image/")){
+    if(norm.length > dataUrlMax) throw new Error("Imagem Base64 muito grande. Use uma imagem menor (ou URL https://...).");
+    return norm;
+  }
+  return clampLen(norm, normalMax);
 }
 
 function hydrateInlineImages(root){
@@ -314,10 +328,10 @@ function getImg(url){
   let srcToUse = url;
   if(url.startsWith("data:image/") && /;base64,/i.test(url)){
     const blobUrl = _dataUrlToBlobUrl(url);
-    if(blobUrl){
-      cacheKey = blobUrl;
-      srcToUse = blobUrl;
-    }
+    // Do not fall back to raw DataURL if conversion fails (avoids ERR_INVALID_URL)
+    if(!blobUrl) return null;
+    cacheKey = blobUrl;
+    srcToUse = blobUrl;
   }
 
   if(!_imgCache.has(cacheKey)){
@@ -1657,7 +1671,8 @@ modal.querySelector("#tFile").onchange = ()=>{ modal.querySelector("#btnUp").cli
         ownerUid: owner,
         linkedCharId: sheet,
         name: clampLen(modal.querySelector("#tName").value, 60),
-        spriteUrl: clampLen(sanitizeImageUrlInput(modal.querySelector("#tSprite").value), 420),
+        // IMPORTANT: do not truncate Base64 DataURLs; it breaks token images (ERR_INVALID_URL).
+        spriteUrl: clampImageUrl(modal.querySelector("#tSprite").value, 420),
         updatedAt: Date.now(),
         inMarkerId: null,
         visible: true
