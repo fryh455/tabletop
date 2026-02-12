@@ -8,6 +8,15 @@ initFirebase();
 bindModal();
 
 const roomId = new URL(location.href).searchParams.get("room");
+// --- Token clipboard / ghosts (GM-only helpers) ---
+let tokenClipboard = null;       // { mode: "copy"|"cut", baseId, tokenData }
+let ghostTokens = [];            // [{id, baseId, tokenData}]
+let lastPointerWorld = {x:0,y:0};
+
+function cloneTokenData(t){
+  return JSON.parse(JSON.stringify(t||{}));
+}
+
 if(!roomId){ toast("Sem roomId na URL.", "error"); }
 
 $("#btnHome").addEventListener("click", ()=>goHome());
@@ -435,9 +444,11 @@ function mapRender(){
 }
 
 function drawTokens(){
-  for(const [id,t] of Object.entries(tokens||{})){
-    if(t && t.visible === false) continue;        // hidden tokens
-    if(t && t.inMarkerId) continue;              // stored tokens not on map
+  const entries = Object.entries(tokens||{})
+    .filter(([id,t])=> !(t && t.visible===false) && !(t && t.inMarkerId))
+    .sort((a,b)=> (Number(a[1]?.z)||0) - (Number(b[1]?.z)||0));
+
+  for(const [id,t] of entries){
     const wx=num(t.x,0), wy=num(t.y,0);
     const r=24*(Number(t.scale)||1);
     const s=worldToScreen(wx,wy);
@@ -445,7 +456,9 @@ function drawTokens(){
     const box=rr*2;
 
     ctx.save();
-    // draw sprite (no circular clip, no border)
+    const isSelected = (id===selectedTokenId);
+
+    // Draw sprite (no clip, no border). If selected, add a glow that follows the sprite silhouette.
     if(t.spriteUrl){
       const img=getImg(t.spriteUrl);
       if(img && img.complete && img.naturalWidth && img.naturalHeight){
@@ -454,15 +467,42 @@ function drawTokens(){
         const dw = iw*k, dh = ih*k;
         const dx = s.x - dw/2;
         const dy = s.y - dh/2;
+
+        if(isSelected){
+          ctx.save();
+          ctx.shadowBlur = 22*dpr;
+          ctx.shadowColor = "rgba(255,255,255,.75)";
+          try{ ctx.drawImage(img, dx, dy, dw, dh); }catch(e){}
+          ctx.restore();
+        }
+
         try{ ctx.drawImage(img, dx, dy, dw, dh); }catch(e){ /* ignore broken */ }
       }else{
         // placeholder while loading
+        if(isSelected){
+          ctx.save();
+          ctx.shadowBlur = 18*dpr;
+          ctx.shadowColor = "rgba(255,255,255,.55)";
+          ctx.fillStyle="rgba(74,163,255,.12)";
+          ctx.fillRect(s.x-rr, s.y-rr, box, box);
+          ctx.restore();
+        }else{
+          ctx.fillStyle="rgba(74,163,255,.10)";
+          ctx.fillRect(s.x-rr, s.y-rr, box, box);
+        }
+      }
+    }else{
+      if(isSelected){
+        ctx.save();
+        ctx.shadowBlur = 18*dpr;
+        ctx.shadowColor = "rgba(255,255,255,.55)";
+        ctx.fillStyle="rgba(74,163,255,.12)";
+        ctx.fillRect(s.x-rr, s.y-rr, box, box);
+        ctx.restore();
+      }else{
         ctx.fillStyle="rgba(74,163,255,.10)";
         ctx.fillRect(s.x-rr, s.y-rr, box, box);
       }
-    }else{
-      ctx.fillStyle="rgba(74,163,255,.10)";
-      ctx.fillRect(s.x-rr, s.y-rr, box, box);
     }
 
     // if player cannot edit, dim slightly (keep behavior without border)
@@ -490,16 +530,57 @@ function drawTokens(){
 
     ctx.restore();
   }
+  // draw GM-only ghost tokens (visual duplicates)
+  if(isMaster() && ghostTokens.length){
+    for(const g of ghostTokens){
+      const t = g.tokenData;
+      if(!t) continue;
+      const wx=num(t.x,0), wy=num(t.y,0);
+      const r=24*(Number(t.scale)||1);
+      const s=worldToScreen(wx,wy);
+      const rr=r*zoom*dpr;
+
+      ctx.save();
+      // subtle highlight for ghosts
+      ctx.globalAlpha = 0.85;
+      if(t.spriteUrl){
+        const img=getImg(t.spriteUrl);
+        if(img && img.complete && img.naturalWidth>0){
+          const size = rr*2;
+          ctx.drawImage(img, (s.x*dpr)-rr, (s.y*dpr)-rr, size, size);
+        }else{
+          ctx.fillStyle="rgba(255,255,255,.10)";
+          ctx.fillRect((s.x*dpr)-rr, (s.y*dpr)-rr, rr*2, rr*2);
+        }
+      }else{
+        ctx.fillStyle="rgba(255,255,255,.10)";
+        ctx.fillRect((s.x*dpr)-rr, (s.y*dpr)-rr, rr*2, rr*2);
+      }
+      ctx.restore();
+    }
+  }
 }
 
 function hitToken(wx, wy){
   let best=null;
-  for(const [id,t] of Object.entries(tokens||{})){
-    if(t && t.visible === false) continue;
-    if(t && t.inMarkerId) continue;
+  const entries = Object.entries(tokens||{})
+    .filter(([id,t])=> !(t && t.visible===false) && !(t && t.inMarkerId))
+    .sort((a,b)=> (Number(a[1]?.z)||0) - (Number(b[1]?.z)||0));
+  for(const [id,t] of entries){
     const dx=wx-num(t.x,0), dy=wy-num(t.y,0);
     const r=24*(Number(t.scale)||1);
     if(dx*dx+dy*dy<=r*r) best={id,t};
+  }
+
+  // GM-only ghosts hit-test (treat as topmost)
+  if(isMaster() && ghostTokens.length){
+    for(const g of ghostTokens){
+      const t=g.tokenData;
+      if(!t) continue;
+      const dx=wx-num(t.x,0), dy=wy-num(t.y,0);
+      const r=24*(Number(t.scale)||1);
+      if(dx*dx+dy*dy<=r*r) best={id:g.id,t, ghost:true};
+    }
   }
   return best;
 }
@@ -617,6 +698,7 @@ function beginPointerAt(sx,sy){
 function movePointerAt(sx,sy){
   if(!down) return;
   const w=screenToWorld(sx,sy);
+  lastPointerWorld = {x:w.x, y:w.y};
 
   if(paintingFog){ applyFogAt(w.x,w.y).catch(()=>{}); return; }
 
@@ -677,23 +759,38 @@ async function endPointerAt(sx,sy){
   const dx = (sx-startPt.sx), dy=(sy-startPt.sy);
   const dist = Math.sqrt(dx*dx+dy*dy);
 
-  // Click / tap (sheet opens only on double-click / double-tap)
-if(dist <= 20){
-  const w=screenToWorld(sx,sy);
-  const hit=hitToken(w.x,w.y);
-  if(hit && canOpenSheet(hit.id, hit.t)){
-    const now=Date.now();
-    if(lastTap.tokenId===hit.id && (now-lastTap.time) <= 350){
-      // double click confirmed
-      lastTap.time=0; lastTap.tokenId=null;
-      openSheetWindow(hit.id, sx, sy).catch(()=>{});
+  // Click / tap
+  // - Single click selects token (no sheet)
+  // - Sheet opens only on double-click/double-tap
+  if(dist <= 20){
+    const w=screenToWorld(sx,sy);
+    const hit=hitToken(w.x,w.y);
+
+    if(hit){
+      // Selection is allowed for GM; for players only if they can edit or open the sheet.
+      if(isMaster() || canEditToken(hit.id, hit.t) || canOpenSheet(hit.id, hit.t)){
+        selectedTokenId = hit.id;
+        mapRender();
+      }
+
+      if(canOpenSheet(hit.id, hit.t)){
+        const now=Date.now();
+        if(lastTap.tokenId===hit.id && (now-lastTap.time) <= 350){
+          lastTap.time=0; lastTap.tokenId=null;
+          openSheetWindow(hit.id, sx, sy).catch(()=>{});
+        }else{
+          lastTap.time=now; lastTap.tokenId=hit.id;
+        }
+      }else{
+        // Non-openable token cancels any pending double click
+        lastTap.time=0; lastTap.tokenId=null;
+      }
     }else{
-      // arm double click
-      lastTap.time=now; lastTap.tokenId=hit.id;
+      // Clicking empty space clears selection
+      selectedTokenId=null;
+      mapRender();
+      lastTap.time=0; lastTap.tokenId=null;
     }
-  }else{
-    // clicking empty space or non-owned token cancels any pending double click
-    lastTap.time=0; lastTap.tokenId=null;
   }
 }else{
   // drag cancels any pending double click
@@ -1113,7 +1210,9 @@ const dtTorso = (VIG + FOR + 3) * 4;
 const dtArm = (VIG + 3) * 3;
 const dtLeg = (VIG + 3) * 3;
 const hpTotal = (dtHead + dtTorso + dtArm*2 + dtLeg*2) * 4;
-const hpCurrent = Math.min(hpTotal, Math.max(0, num(char.hpCurrent, hpTotal)));
+// IMPORTANT: HP atual é por TOKEN (instância), para permitir vários NPCs compartilharem a mesma ficha-base.
+// Fallback: se o token não tiver hpCurrent, usa o valor salvo na ficha ou o total calculado.
+const hpCurrent = Math.min(hpTotal, Math.max(0, num(token?.hpCurrent, num(char.hpCurrent, hpTotal))));
 const invLimit = (FOR + VIG) * 4;
 const invUsed = (char.inventory||[]).reduce((s,it)=>s+num(it.kg,0),0);
 const invLeft = Math.max(0, invLimit - invUsed);
@@ -1214,9 +1313,10 @@ const invLeft = Math.max(0, invLimit - invUsed);
       try{
         const dmg = num(hpInp?.value,0);
         if(dmg===0) return toast("Digite um valor diferente de 0.","error");
-        const cur = Math.min(hpTotal, Math.max(0, num(char.hpCurrent, hpTotal)));
+        const cur = Math.min(hpTotal, Math.max(0, num(token?.hpCurrent, num(char.hpCurrent, hpTotal))));
         const next = (dmg>0) ? Math.max(0, cur - dmg) : Math.min(hpTotal, cur + Math.abs(dmg));
-        await dbUpdate(`rooms/${roomId}/characters/${char.charId}`, { hpCurrent: next, updatedAt: Date.now() });
+        // salva no token (instância), não na ficha-base
+        await dbUpdate(`rooms/${roomId}/tokens/${sheetTokenId||token?.tokenId}`, { hpCurrent: next, updatedAt: Date.now() });
         toast(`HP: ${next}/${hpTotal}`, "ok");
       }catch(e){ toast(String(e?.message||e),"error"); }
     };
@@ -1625,8 +1725,138 @@ dbg.style.cssText="position:fixed; left:10px; bottom:10px; z-index:200; font:12p
 document.body.appendChild(dbg);
 let dbgOn=false;
 window.addEventListener("keydown",(e)=>{
+  // global keys
   if(e.key==="m"||e.key==="M") keyMDown=true;
   if(e.key==='`'){ dbgOn=!dbgOn; dbg.style.display=dbgOn?'block':'none'; }
+
+  // GM-only clipboard / visibility controls
+  const gm = isMaster();
+
+  // delete/backspace: soft-hide token (keeps saved) OR remove ghost (visual)
+  if(gm && (e.key==="Delete" || e.key==="Backspace")){
+    if(!selectedTokenId) return;
+    // remove ghost token
+    const gi = ghostTokens.findIndex(g=>g.id===selectedTokenId);
+    if(gi>=0){
+      ghostTokens.splice(gi,1);
+      selectedTokenId=null;
+      mapRender();
+      e.preventDefault();
+      return;
+    }
+    const t = tokens?.[selectedTokenId];
+    if(t){
+      // soft-hide by marking visible=false (keeps on DB)
+      if(t.visible===false){
+        toast("Token já está oculto. Use a lista do mestre para restaurar.");
+      }else{
+        dbUpdate(`rooms/${roomId}/tokens/${selectedTokenId}`, { visible:false }).catch(()=>{});
+        toast("Token ocultado (não foi apagado).");
+      }
+      e.preventDefault();
+    }
+    return;
+  }
+
+  // Ctrl/Cmd combos (GM-only)
+  const combo = (e.ctrlKey || e.metaKey);
+  if(gm && combo){
+    const k = (e.key||"").toLowerCase();
+
+    // copy: visual duplicate source
+    if(k==="c"){
+      if(selectedTokenId && tokens?.[selectedTokenId]){
+        tokenClipboard = { mode:"copy", baseId:selectedTokenId, tokenData: cloneTokenData(tokens[selectedTokenId]) };
+        toast("Token copiado (visual).");
+        e.preventDefault();
+      }
+      return;
+    }
+    // cut: move real token
+    if(k==="x"){
+      if(selectedTokenId && tokens?.[selectedTokenId]){
+        tokenClipboard = { mode:"cut", baseId:selectedTokenId, tokenData: cloneTokenData(tokens[selectedTokenId]) };
+        toast("Token recortado (mover).");
+        e.preventDefault();
+      }
+      return;
+    }
+    // paste
+    if(k==="v"){
+      if(!tokenClipboard) return;
+
+      const w = lastPointerWorld || {x:0,y:0};
+
+      if(tokenClipboard.mode==="copy"){
+        const src = tokenClipboard.tokenData;
+        if(src){
+          const gId = "ghost_"+Date.now().toString(36)+"_"+Math.random().toString(36).slice(2,6);
+          const g = cloneTokenData(src);
+          g.x = w.x; g.y = w.y;
+          ghostTokens.push({ id:gId, baseId: tokenClipboard.baseId, tokenData:g });
+          selectedTokenId = gId;
+          mapRender();
+          toast("Colado (duplicata visual).");
+        }
+        e.preventDefault();
+        return;
+      }
+
+      if(tokenClipboard.mode==="cut"){
+        const id = tokenClipboard.baseId;
+        if(id && tokens?.[id]){
+          dbUpdate(`rooms/${roomId}/tokens/${id}`, { x:w.x, y:w.y }).catch(()=>{});
+          selectedTokenId = id;
+          mapRender();
+          toast("Token movido.");
+        }
+        tokenClipboard = null;
+        e.preventDefault();
+        return;
+      }
+    }
+  }
+
+  // C: center view on selected token (GM or player)
+  if(e.key==="c" || e.key==="C"){
+    let id = selectedTokenId;
+    if(id && id.startsWith("ghost_")) id = null;
+    if(!id){
+      // try player's controlled token
+      const my = (Object.entries(tokens||{}).find(([tid,t])=> (t?.ownerUid||"")===(auth?.currentUser?.uid||"")) || [null,null])[0];
+      id = my;
+    }
+    if(id && tokens?.[id]){
+      view.x = num(tokens[id].x,0);
+      view.y = num(tokens[id].y,0);
+    }else{
+      view.x = 0; view.y = 0;
+    }
+    mapRender();
+    e.preventDefault();
+    return;
+  }
+
+  // T: cycle tokens (GM: all visible; player: only controlled)
+  if(e.key==="t" || e.key==="T"){
+    const uid = auth?.currentUser?.uid || "";
+    const list = Object.entries(tokens||{})
+      .filter(([id,t])=> !(t && t.visible===false) && !(t && t.inMarkerId))
+      .filter(([id,t])=> gm ? true : (t?.ownerUid||"")===uid)
+      .sort((a,b)=> (Number(a[1]?.z)||0) - (Number(b[1]?.z)||0))
+      .map(([id])=>id);
+
+    if(list.length){
+      const curIdx = selectedTokenId ? list.indexOf(selectedTokenId) : -1;
+      const next = list[(curIdx+1) % list.length];
+      selectedTokenId = next;
+      view.x = num(tokens[next].x,0);
+      view.y = num(tokens[next].y,0);
+      mapRender();
+    }
+    e.preventDefault();
+    return;
+  }
 });
 window.addEventListener("keyup",(e)=>{ if(e.key==="m"||e.key==="M") keyMDown=false; });
 function setDbg(txt){ if(!dbgOn) return; dbg.textContent=txt; }
@@ -2064,6 +2294,23 @@ function syncToolsUI(){
             <button class="danger" data-del="${id}">Apagar</button>
           </div>
         `;
+        // click row: restore if hidden, otherwise select
+        row.addEventListener("click",(ev)=>{
+          if(ev.target && ev.target.closest && ev.target.closest("button")) return;
+          if(t && t.visible===false){
+            dbUpdate(`rooms/${roomId}/tokens/${id}`, { visible:true }).catch(()=>{});
+            toast("Token restaurado.");
+          }else{
+            selectedTokenId = id;
+            mapRender();
+          }
+        });
+        if(t && t.visible===false){
+          row.style.opacity = "0.55";
+          const st = row.querySelector("strong");
+          if(st) st.textContent = (st.textContent||"Token") + " (oculto)";
+          // replace delete button label to "Apagar" still (hard delete), but add a restore hint
+        }
         list.appendChild(row);
       });
       list.querySelectorAll("[data-open]").forEach(b=> b.onclick=()=>openTokenEditor(b.dataset.open));
