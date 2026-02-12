@@ -114,12 +114,24 @@ function worldToScreen(wx, wy){ return { x:(wx-view.x)*zoom*dpr, y:(wy-view.y)*z
 function screenToWorld(sx, sy){ return { x:sx/(zoom*dpr)+view.x, y:sy/(zoom*dpr)+view.y }; }
 
 const _imgCache = new Map();
+function _normalizeImageUrl(url){
+  if(!url) return "";
+  url = String(url).trim();
+  if(!url) return "";
+  if(url.startsWith("data:")){
+    if(!url.includes(",")) return "";
+    if(!/^data:image\//i.test(url)) return "";
+  }
+  return url;
+}
 function getImg(url){
+  url=_normalizeImageUrl(url);
   if(!url) return null;
   if(!_imgCache.has(url)){
     const img=new Image();
     img.crossOrigin="anonymous";
-    img.src=url;
+    img.onerror = ()=>{ /* broken image */ };
+    try{ img.src=url; }catch(e){ return null; }
     _imgCache.set(url,img);
   }
   return _imgCache.get(url);
@@ -129,13 +141,13 @@ function drawBackground(){
   const bgUrl = room?.settings?.map?.bgUrl || "";
   if(!bgUrl) return;
   const img=getImg(bgUrl);
-  if(!img || !img.complete) return;
+  if(!img || !img.complete || !img.naturalWidth) return;
   ctx.save();
   const p=worldToScreen(0,0);
   const w = img.naturalWidth * zoom * dpr;
   const h = img.naturalHeight * zoom * dpr;
   ctx.globalAlpha = 0.92;
-  ctx.drawImage(img, p.x, p.y, w, h);
+  try{ ctx.drawImage(img, p.x, p.y, w, h); }catch(e){ /* ignore broken */ }
   ctx.restore();
 }
 
@@ -165,9 +177,9 @@ function drawTokens(){
     ctx.save();
     if(t.spriteUrl){
       const img=getImg(t.spriteUrl);
-      if(img && img.complete){
+      if(img && img.complete && img.naturalWidth && img.naturalHeight){
         ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.clip();
-        ctx.drawImage(img, s.x-rr, s.y-rr, rr*2, rr*2);
+        try{ ctx.drawImage(img, s.x-rr, s.y-rr, rr*2, rr*2); }catch(e){ /* ignore broken */ }
       }else{
         ctx.fillStyle="rgba(74,163,255,.18)";
         ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.fill();
@@ -443,29 +455,31 @@ async function endPointerAt(sx,sy){
 canvas.style.touchAction = "none";
 
 canvas.addEventListener("pointerdown",(ev)=>{
+  ev.preventDefault();
   try{
+    canvas.setPointerCapture?.(ev.pointerId);
     const {sx,sy}=getScreenXY(ev);
     beginPointerAt(sx,sy);
-  }catch(e){
-    // hard fail shouldn't block the app
-    console.error(e);
-  }
-},{passive:true});
+  }catch(e){ /* ignore */ }
+},{passive:false});
 
 canvas.addEventListener("pointermove",(ev)=>{
+  ev.preventDefault();
   try{
     if(!down) return;
     const {sx,sy}=getScreenXY(ev);
     movePointerAt(sx,sy);
-  }catch(e){ console.error(e); }
-},{passive:true});
+  }catch(e){ /* ignore */ }
+},{passive:false});
 
 canvas.addEventListener("pointerup",(ev)=>{
+  ev.preventDefault();
   try{
+    canvas.releasePointerCapture?.(ev.pointerId);
     const {sx,sy}=getScreenXY(ev);
     endPointerAt(sx,sy);
-  }catch(e){ console.error(e); }
-},{passive:true});
+  }catch(e){ /* ignore */ }
+},{passive:false});
 
 canvas.addEventListener("pointercancel",()=>{
   down=false; dragging=null; pan=true; paintingFog=false;
@@ -484,7 +498,7 @@ canvas.addEventListener("click",(ev)=>{
         toast("Token detectado, mas sem permissão pra abrir ficha (owner/master).", "error");
       }
     }
-  }catch(e){ console.error(e); }
+  }catch(e){ /* ignore */ }
 });
 
 canvas.addEventListener("mousemove",(ev)=>{
@@ -522,16 +536,16 @@ canvas.addEventListener("touchstart",(e)=>{
   const t0=e.touches[0]; if(!t0) return;
   const rect=canvas.getBoundingClientRect();
   const sx=(t0.clientX-rect.left)*dpr, sy=(t0.clientY-rect.top)*dpr;
-  beginPointer(sx,sy);
+  beginPointerAt(sx,sy);
 },{passive:true});
 canvas.addEventListener("touchmove",(e)=>{
   const t0=e.touches[0]; if(!t0) return;
   const rect=canvas.getBoundingClientRect();
   const sx=(t0.clientX-rect.left)*dpr, sy=(t0.clientY-rect.top)*dpr;
-  movePointer(sx,sy);
+  movePointerAt(sx,sy);
 },{passive:true});
 canvas.addEventListener("touchend",()=>{
-  endPointer(last.sx,last.sy);
+  endPointerAt(last.sx,last.sy);
 },{passive:true});
 
 /* =================== Rolls helpers =================== */
@@ -1253,7 +1267,10 @@ dbg.style.cssText="position:fixed; left:10px; bottom:10px; z-index:200; font:12p
 document.body.appendChild(dbg);
 let dbgOn=false;
 window.addEventListener("keydown",(e)=>{
-  if(e.key==="m"||e.key==="M") keyMDown=true; if(e.key==='`'){ dbgOn=!dbgOn; dbg.style.display=dbgOn?'block':'none'; }});
+  if(e.key==="m"||e.key==="M") keyMDown=true;
+  if(e.key==='`'){ dbgOn=!dbgOn; dbg.style.display=dbgOn?'block':'none'; }
+});
+window.addEventListener("keyup",(e)=>{ if(e.key==="m"||e.key==="M") keyMDown=false; });
 function setDbg(txt){ if(!dbgOn) return; dbg.textContent=txt; }
 
 fab.onclick=()=>{ toolsState.open=!toolsState.open; syncToolsUI(); };
@@ -1265,6 +1282,18 @@ function tokenOptionsForSheets(selectedId){
 function playerOptions(selectedUid){
   const opts = Object.values(players||{}).map(p=>`<option value="${p.uid}" ${p.uid===selectedUid?"selected":""}>${p.uid}</option>`).join("");
   return `<option value="">(mestre)</option>` + opts;
+}
+
+async function deleteToken(tokenId){
+  if(!isMaster()) return;
+  const t=tokens?.[tokenId];
+  const name=t?.name||"Token";
+  if(!confirm(`Apagar token "${name}"? Isso remove do mapa e não pode ser desfeito.`)) return;
+  try{
+    await dbSet(`rooms/${roomId}/tokens/${tokenId}`, null);
+    await addLog("token","Token apagado",{tokenId});
+    toast("Token apagado.","ok");
+  }catch(err){ toast(String(err?.message||err),"error"); }
 }
 
 async function createToken(){
@@ -1658,6 +1687,7 @@ function syncToolsUI(){
       });
       list.querySelectorAll("[data-open]").forEach(b=> b.onclick=()=>openTokenEditor(b.dataset.open));
       list.querySelectorAll("[data-sheet]").forEach(b=> b.onclick=()=>openSheetWindow(b.dataset.sheet));
+      list.querySelectorAll("[data-del]").forEach(b=> b.onclick=()=>deleteToken(b.dataset.del));
     }
     const btn = body.querySelector("#mkToken");
     if(btn) btn.onclick=createToken;
