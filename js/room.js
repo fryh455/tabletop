@@ -2560,7 +2560,7 @@ async function openMarkerPopup(markerId){
     toast("Marco salvo.","ok");
     box.remove();
   };
-}
+
 
 /* =================== CSS tweaks for fullscreen canvas =================== */
 (function injectStyle(){
