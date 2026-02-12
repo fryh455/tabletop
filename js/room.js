@@ -1,6 +1,6 @@
-/* SUR4 ROOM BUILD 66 */
-/* SUR4 ROOM BUILD 66 */
-const BUILD_ID = 66;
+/* SUR4 ROOM BUILD 67 */
+/* SUR4 ROOM BUILD 67 */
+const BUILD_ID = 67;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -29,6 +29,20 @@ let role="player";
 let room=null;
 let players={}, tokens={}, characters={}, rolls={}, logs={}, markers={}, advCounts={};
 let unsub=[];
+
+// Attribute select helper (used in item/adv/dis editors)
+function attrSelectHtml(id, current){
+  const cur = String(current||"FOR").toUpperCase();
+  const opts = [
+    ["FOR", "FOR (Força)"],
+    ["DEX", "DEX (Destreza)"],
+    ["VIG", "VIG (Vigor)"],
+    ["QI",  "QI (Inteligência)"],
+  ];
+  return `<select id="${esc(id)}">${opts.map(([k,label])=>
+    `<option value="${k}" ${k===cur?"selected":""}>${label}</option>`
+  ).join("")}</select>`;
+}
 
 function clearSubs(){ unsub.forEach(fn=>fn&&fn()); unsub=[]; }
 function isMaster(){ return (me && room && room.masterUid===me.uid) || role==="master"; }
@@ -2898,4 +2912,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 66 ===
+// === EOF marker: BUILD_ID 67 ===
