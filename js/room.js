@@ -1,5 +1,6 @@
+/* SUR4 ROOM BUILD 42 */
 /* SUR4 ROOM BUILD 41 */
-const BUILD_ID = 41;
+const BUILD_ID = 42;
 console.log("SUR4 BUILD v26");
 
 import { $, $$, bindModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
@@ -533,11 +534,7 @@ async function setPostImageKeyInteractive(){
 function applyModOp(total, m, op){
   const mod = Number(m)||0;
   const o = (op||"add");
-  if(o==="mul"){
-    // multiplicação direta no total
-    return Math.floor(total * mod);
-  }
-  // soma (aceita negativo)
+  if(o==="mul") return Math.floor(total * mod);
   return total + mod;
 }
 
@@ -556,6 +553,7 @@ function mentalPenalty(mental){ return (mental<=-8) ? -5 : 0; }
 function advantagesDisabled(mental){ return mental<=-11; }
 
 async function pushRoll(payload){
+  const clean = JSON.parse(JSON.stringify(payload||{}));
   const clean = JSON.parse(JSON.stringify(payload||{}));
   await dbPush(`rooms/${roomId}/rolls`, clean);
   await dbPush(`logs/${roomId}`, { type:"roll", actorUid: me.uid, message: clampLen(clean?.context?.label||"Rolagem",200), payload: clean.context||{}, ts: Date.now() });
@@ -1632,7 +1630,6 @@ function syncToolsUI(){
     }else{
       entries.forEach(([id,t])=>{
         const row=document.createElement("div");
-        row.className="row";
         row.style.cssText="display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.03)";
         row.innerHTML = `
           <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
@@ -1725,7 +1722,7 @@ function syncToolsUI(){
       <div class="card pad">
         <div class="actions" style="justify-content:space-between; align-items:center">
           <strong>Marcos</strong>
-          <small style="color:var(--muted)">Crie no mapa: clique com o botão direito (mestre)</small>
+          <small style="color:var(--muted)">Crie no mapa: clique direito (mestre)</small>
         </div>
         <div id="mkList" style="margin-top:10px; display:flex; flex-direction:column; gap:8px"></div>
       </div>
@@ -1762,16 +1759,18 @@ function syncToolsUI(){
         <strong>Mapa</strong>
         <p style="margin:8px 0; color:var(--muted)">Imagem de fundo para todos.</p>
 
-        <label class="label" style="margin-top:10px">URL</label>
+        <label class="label" style="margin-top:10px">URL (opcional)</label>
         <div class="actions" style="gap:8px">
-          <input id="bgUrl" style="flex:1" placeholder="https://..." value="${esc(bgUrl)}" />
+          <input id="bgUrl" style="flex:1" placeholder="https://..." value="${esc(bgUrl.startsWith("data:") ? "" : bgUrl)}" />
           <button class="secondary" id="bgSave">Salvar</button>
         </div>
 
         <div class="actions" style="margin-top:10px">
           <input id="bgFile" type="file" accept="image/*" />
-          <button class="secondary" id="bgUpload">Upload</button>
+          <button class="secondary" id="bgUpload">Upload (Base64)</button>
         </div>
+
+        <small style="color:var(--muted)">Dica: prefira imagens leves (Base64 pesa mais).</small>
       </div>
     `;
     const bgSave = body.querySelector("#bgSave");
@@ -1784,9 +1783,8 @@ function syncToolsUI(){
     if(bgUpload) bgUpload.onclick = async ()=>{
       const f = body.querySelector("#bgFile")?.files?.[0];
       if(!f) return toast("Escolha um arquivo.","error");
-      let key = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
       const dataUrl = await readFileAsDataURL(f);
-    await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: dataUrl });
+      await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: dataUrl });
       toast("Mapa atualizado.","ok");
     };
     return;
@@ -1848,11 +1846,10 @@ function syncToolsUI(){
 
   // ---------- MESA ----------
   if(tab==="room"){
-    const postKey = (room?.settings?.postimageKey) || localStorage.getItem("sur4_postimage_key") || "";
     body.innerHTML = `
       <div class="card pad">
         <strong>Mesa</strong>
-        <p style="margin:8px 0; color:var(--muted)">Configurações gerais.</p>
+        <p style="margin:8px 0; color:var(--muted)">Ferramentas gerais.</p>
 
         <div class="actions" style="margin-top:12px">
           <button class="secondary" id="btnClearRolls">Limpar rolagens</button>
@@ -1892,14 +1889,14 @@ function syncToolsUI(){
       </div>
     `;
     const list=body.querySelector("#rl");
-    const entries = Object.values(rolls||{}).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,80);
+    const entries = Object.values(rolls||{}).sort((a,b)=>(b.ts||b.timestamp||0)-(a.ts||a.timestamp||0)).slice(0,80);
     if(entries.length===0) list.innerHTML = `<small style="color:var(--muted)">Sem rolagens.</small>`;
     else{
       entries.forEach(r=>{
         const div=document.createElement("div");
         div.style.cssText="padding:8px; border:1px solid rgba(255,255,255,.08); border-radius:12px; background:rgba(255,255,255,.03)";
         div.innerHTML = `<strong style="font-size:13px">${esc(r.label||r.expr||"Roll")}</strong>
-          <div class="mono" style="margin-top:6px; color:var(--muted)">${esc(JSON.stringify(r.results||r.result||r.total||""))}</div>`;
+          <div class="mono" style="margin-top:6px; color:var(--muted)">${esc(String(r.total ?? (r.results?JSON.stringify(r.results):"")))}</div>`;
         list.appendChild(div);
       });
     }
@@ -1929,133 +1926,10 @@ function syncToolsUI(){
     return;
   }
 
-  // fallback
   body.innerHTML = `<small style="color:var(--muted)">Selecione uma aba.</small>`;
 }
 
-if(tab==="fog"){
-  const fogEnabled = !!room?.settings?.fog?.enabled;
-  const size = Math.max(20, Math.min(800, fogBrush||80));
-  body.innerHTML = `
-    <div class="card pad">
-      <strong>Fog</strong>
-      <p style="margin:8px 0; color:var(--muted)">A fog apaga completamente para players. O mestre pinta quadrados no mapa.</p>
 
-      <div class="actions" style="gap:8px; flex-wrap:wrap; margin-top:10px">
-        <button class="secondary" id="fogToggle">${fogEnabled ? "Desativar fog" : "Ativar fog"}</button>
-        <button class="secondary" id="fogPaint">Pintar</button>
-        <button class="secondary" id="fogErase">Apagar</button>
-      </div>
-
-      <div class="actions" style="gap:8px; align-items:flex-end; margin-top:10px">
-        <div style="flex:1">
-          <small style="color:var(--muted)">Tamanho do quadrado</small>
-          <input id="fogSize" type="number" value="${size}" />
-        </div>
-        <button class="secondary" id="fogUse">Usar no mapa</button>
-        <button class="secondary" id="fogStop">Parar</button>
-      </div>
-
-      <div class="actions" style="margin-top:10px">
-        <button class="secondary" id="fogClear">Limpar tudo</button>
-      </div>
-
-      <small style="color:var(--muted)">Dica: clique em “Usar no mapa” e depois clique/arraste no mapa para pintar/apagar.</small>
-    </div>
-  `;
-
-  (body.querySelector("#fogToggle")||{}).onclick=async ()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    const cur = !!room?.settings?.fog?.enabled;
-    await dbUpdate(`rooms/${roomId}/settings/fog`, { enabled: !cur });
-    toast(!cur ? "Fog ativada." : "Fog desativada.","ok");
-  };
-
-  (body.querySelector("#fogPaint")||{}).onclick=()=>{ fogMode="paint"; toast("Fog: pintar","info"); };
-  (body.querySelector("#fogErase")||{}).onclick=()=>{ fogMode="erase"; toast("Fog: apagar","info"); };
-
-  (body.querySelector("#fogSize")||{}).onchange=()=>{
-    fogBrush = Math.max(20, Math.min(800, num(body.querySelector("#fogSize").value, 80)));
-    toast("Tamanho atualizado.","ok");
-  };
-
-  (body.querySelector("#fogUse")||{}).onclick=()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    toolsState.fogPaintEnabled=true;
-    toast("Modo fog ON: clique/arraste no mapa.","ok");
-  };
-
-  (body.querySelector("#fogStop")||{}).onclick=()=>{
-    toolsState.fogPaintEnabled=false;
-    toast("Modo fog OFF.","info");
-  };
-
-  (body.querySelector("#fogClear")||{}).onclick=async ()=>{
-    if(!isMaster()) return toast("Só o mestre.","error");
-    if(!confirm("Limpar toda a fog da sala?")) return;
-    await dbSet(`rooms/${roomId}/settings/fog/blocks`, null);
-    toast("Fog limpa.","ok");
-  };
-
-  return;
-}
-
-if(tab==="rolls"){
-    const rows = Object.values(rolls||{}).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0)).slice(0,120);
-    body.innerHTML = `
-      <div class="card pad" style="margin-top:10px">
-        <div class="actions" style="justify-content:space-between">
-          <strong>Rolagens</strong>
-          <button class="danger" id="clearRolls">Limpar</button>
-        </div>
-        <div class="list" style="margin-top:8px">
-          ${rows.length? rows.map(r=>`
-            <div class="item">
-              <div class="actions" style="justify-content:space-between">
-                <strong>${esc(r.context?.kind||"roll")}</strong>
-                <small class="mono">${new Date(r.timestamp||0).toLocaleTimeString()}</small>
-              </div>
-              <div><strong>${r.total}</strong> <small>${esc(r.expression||"")}</small></div>
-            </div>
-          `).join("") : `<div class="item"><small>Nenhuma rolagem.</small></div>`}
-        </div>
-      </div>
-    `;
-    (body.querySelector("#clearRolls")||{}).onclick=async ()=>{ await dbSet(`rooms/${roomId}/rolls`, {}); toast("Rolagens limpas.","ok"); };
-    return;
-  }
-
-  if(tab==="logs"){
-    const rows = Object.values(logs||{}).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,120);
-    body.innerHTML = `
-      <div class="card pad" style="margin-top:10px">
-        <div class="actions" style="justify-content:space-between">
-          <strong>Logs</strong>
-          <button class="danger" id="clearLogs">Limpar</button>
-        </div>
-        <div class="list" style="margin-top:8px">
-          ${rows.length? rows.map(l=>`
-            <div class="item">
-              <div class="actions" style="justify-content:space-between">
-                <strong>${esc(l.type||"log")}</strong>
-                <small class="mono">${new Date(l.ts||0).toLocaleTimeString()}</small>
-              </div>
-              <div>${esc(l.message||"")}</div>
-            </div>
-          `).join("") : `<div class="item"><small>Sem logs.</small></div>`}
-        </div>
-      </div>
-    `;
-    (body.querySelector("#clearLogs")||{}).onclick=async ()=>{ await dbSet(`logs/${roomId}`, {}); toast("Logs limpos.","ok"); };
-    return;
-  }
-}
-
-/* =================== MARKERS (ONLY items + store/release tokens) =================== */
-async function createMarkerAt(x,y){
-  await dbPush(`rooms/${roomId}/markers`, { title:"Marco", x, y, tokenIds:[], items:[], ts:Date.now() });
-  toast("Marco criado.", "ok");
-}
 function tokenSelectOptions(){
   return Object.entries(tokens||{})
     .filter(([_,t])=>!t?.inMarkerId)
