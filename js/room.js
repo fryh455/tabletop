@@ -337,6 +337,7 @@ function getImg(url){
   if(!_imgCache.has(cacheKey)){
     const img=new Image();
     img.crossOrigin="anonymous";
+    img.onload = ()=>{ try{ if(typeof mapRender==="function") mapRender(); }catch(e){} };
     img.onerror = ()=>{ /* broken image */ };
     try{ img.src=srcToUse; }catch(e){ return null; }
     _imgCache.set(cacheKey,img);
@@ -380,81 +381,50 @@ function drawTokens(){
     const r=24*(Number(t.scale)||1);
     const s=worldToScreen(wx,wy);
     const rr=r*zoom*dpr;
+    const box=rr*2;
 
     ctx.save();
+    // draw sprite (no circular clip, no border)
     if(t.spriteUrl){
       const img=getImg(t.spriteUrl);
       if(img && img.complete && img.naturalWidth && img.naturalHeight){
-        ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.clip();
-        try{ ctx.drawImage(img, s.x-rr, s.y-rr, rr*2, rr*2); }catch(e){ /* ignore broken */ }
+        const iw = img.naturalWidth, ih = img.naturalHeight;
+        const k = Math.min(box/iw, box/ih);
+        const dw = iw*k, dh = ih*k;
+        const dx = s.x - dw/2;
+        const dy = s.y - dh/2;
+        try{ ctx.drawImage(img, dx, dy, dw, dh); }catch(e){ /* ignore broken */ }
       }else{
-        ctx.fillStyle="rgba(74,163,255,.18)";
-        ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.fill();
+        // placeholder while loading
+        ctx.fillStyle="rgba(74,163,255,.10)";
+        ctx.fillRect(s.x-rr, s.y-rr, box, box);
       }
     }else{
-      ctx.fillStyle="rgba(74,163,255,.18)";
-      ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="rgba(74,163,255,.10)";
+      ctx.fillRect(s.x-rr, s.y-rr, box, box);
     }
 
+    // if player cannot edit, dim slightly (keep behavior without border)
     const editable = canEditToken(id, t);
-    ctx.strokeStyle = editable ? "#9aa4b244" : "#9aa4b222";
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.stroke();
-
     if(!editable){
       ctx.globalAlpha = 0.7;
-      ctx.fillStyle="rgba(0,0,0,.35)";
-      ctx.beginPath(); ctx.arc(s.x,s.y,rr,0,Math.PI*2); ctx.fill();
-      ctx.globalAlpha=1;
     }
+
+    // optional tiny label
+    const name=(t.name||"").trim();
+    if(name){
+      ctx.globalAlpha = 1;
+      ctx.font = `${12*dpr}px system-ui, -apple-system, Segoe UI, Roboto, Arial`;
+      ctx.textAlign="center";
+      ctx.textBaseline="top";
+      ctx.fillStyle="rgba(0,0,0,.55)";
+      ctx.fillText(name, s.x+1*dpr, s.y+rr+3*dpr);
+      ctx.fillStyle="rgba(255,255,255,.92)";
+      ctx.fillText(name, s.x, s.y+rr+2*dpr);
+    }
+
     ctx.restore();
   }
-}
-
-function drawFog(){
-  const fog = room?.settings?.fog;
-  if(!fog?.enabled) return;
-  const blocks = fog.blocks || {};
-  ctx.save();
-  ctx.fillStyle = isMaster() ? "rgba(0,0,0,.60)" : "rgba(0,0,0,1)";
-  for(const key of Object.keys(blocks)){
-    const b=blocks[key];
-    const p=worldToScreen(num(b.x,0), num(b.y,0));
-    const w=num(b.w,160)*zoom*dpr;
-    const h=num(b.h,160)*zoom*dpr;
-    ctx.fillRect(p.x,p.y,w,h);
-  }
-  ctx.restore();
-}
-
-function drawMarkers(){
-  if(!isMaster()) return;
-  for(const [id,m] of Object.entries(markers||{})){
-    const p=worldToScreen(num(m.x,0), num(m.y,0));
-    ctx.save();
-    ctx.fillStyle="rgba(255,255,255,.85)";
-    ctx.beginPath();
-    ctx.moveTo(p.x, p.y-9);
-    ctx.lineTo(p.x+9, p.y+9);
-    ctx.lineTo(p.x-9, p.y+9);
-    ctx.closePath();
-    ctx.fill();
-    ctx.font = `${Math.max(12, 12*zoom)}px system-ui`;
-    ctx.fillText(m.title||"Marco", p.x+12, p.y+5);
-    ctx.restore();
-  }
-}
-
-function mapRender(){
-  if(!room) return;
-  zoom = num(room?.settings?.map?.zoom, 1);
-  gridSize = num(room?.settings?.map?.gridSize, 48);
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  drawBackground();
-  drawGrid();
-  drawTokens();
-  drawMarkers();
-  drawFog();
 }
 
 function hitToken(wx, wy){
@@ -520,6 +490,7 @@ let startPt={sx:0,sy:0};
 let last={sx:0,sy:0};
 let lastClickWorld={x:0,y:0};
 let lastClickScreen={x:0,y:0};
+let lastTap={time:0, tokenId:null}; // double-click to open sheet
 
 function getScreenXY(ev){
   const rect=canvas.getBoundingClientRect();
@@ -641,20 +612,29 @@ async function endPointerAt(sx,sy){
   const dx = (sx-startPt.sx), dy=(sy-startPt.sy);
   const dist = Math.sqrt(dx*dx+dy*dy);
 
-  // Click / tap
-  if(dist <= 10){
-    const w=screenToWorld(sx,sy);
-    const hit=hitToken(w.x,w.y);
-    if(hit){
-      // Always allow master; players only own token
-      if(canOpenSheet(hit.id, hit.t)){
-        openSheetWindow(hit.id, sx, sy).catch(()=>{});
-      }else{
-        // not clickable for sheet, but still selectable
-        // player without permission: ignore click
-      }
+  // Click / tap (sheet opens only on double-click / double-tap)
+if(dist <= 10){
+  const w=screenToWorld(sx,sy);
+  const hit=hitToken(w.x,w.y);
+  if(hit && canOpenSheet(hit.id, hit.t)){
+    const now=Date.now();
+    if(lastTap.tokenId===hit.id && (now-lastTap.time) <= 350){
+      // double click confirmed
+      lastTap.time=0; lastTap.tokenId=null;
+      openSheetWindow(hit.id, sx, sy).catch(()=>{});
+    }else{
+      // arm double click
+      lastTap.time=now; lastTap.tokenId=hit.id;
     }
+  }else{
+    // clicking empty space or non-owned token cancels any pending double click
+    lastTap.time=0; lastTap.tokenId=null;
   }
+}else{
+  // drag cancels any pending double click
+  lastTap.time=0; lastTap.tokenId=null;
+}
+
 }
 
 
