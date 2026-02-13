@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 69;
+const BUILD_ID = 71;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -641,6 +641,7 @@ let down=false, dragging=null, pan=true;
 let resizing=null; // token resize state (master only)
 let mapResizing=null; // map resize state (master only, Shift+M drag)
 let startPt={sx:0,sy:0};
+let lastPointerType = "mouse";
 let last={sx:0,sy:0};
 let lastClickWorld={x:0,y:0};
 let lastClickScreen={x:0,y:0};
@@ -807,7 +808,8 @@ async function endPointerAt(sx,sy){
   // Click / tap
   // - Single click selects token (no sheet)
   // - Sheet opens only on double-click/double-tap
-  if(dist <= 20){
+  const tapDist = (lastPointerType === "touch") ? 35 : 20;
+  if(dist <= tapDist){
     const w=screenToWorld(sx,sy);
     const hit=hitToken(w.x,w.y);
 
@@ -820,7 +822,8 @@ async function endPointerAt(sx,sy){
 
       if(canOpenSheet(hit.id, hit.t)){
         const now=Date.now();
-        if(lastTap.tokenId===hit.id && (now-lastTap.time) <= 350){
+        const dblMs = (lastPointerType === "touch") ? 500 : 350;
+        if(lastTap.tokenId===hit.id && (now-lastTap.time) <= dblMs){
           lastTap.time=0; lastTap.tokenId=null;
           openSheetWindow(hit.id, sx, sy).catch(()=>{});
         }else{
@@ -850,6 +853,7 @@ canvas.style.touchAction = "none";
 canvas.addEventListener("pointerdown",(ev)=>{
   ev.preventDefault();
   try{
+    lastPointerType = ev.pointerType || "mouse";
     canvas.setPointerCapture?.(ev.pointerId);
     const {sx,sy}=getScreenXY(ev);
     beginPointerAt(sx,sy);
@@ -1264,11 +1268,14 @@ function refreshOpenSheets(){
       continue;
     }
     w.el.querySelector(".swTitle").textContent = char.name || "Ficha";
-    renderSheetInto(w.el.querySelector(".swBody"), t, char);
+    renderSheetInto(w.el.querySelector(".swBody"), t, char, t?.tokenId);
   }
 }
 
 function renderSheetInto(root, token, char, tokenId){
+  // tokenId may be omitted by older callers
+  tokenId = tokenId || token?.tokenId || null;
+  const sheetTokenId = tokenId; // alias defensivo p/ evitar ReferenceError (HP handlers antigos)
   const inv=char.inventory||[];
   const advs=char.advantages||[];
   const disads=char.disadvantages||[];
@@ -1396,7 +1403,7 @@ const invLeft = Math.max(0, invLimit - invUsed);
         const cur = Math.min(hpTotal, Math.max(0, num(token?.hpCurrent, hpTotal)));
         const next = (dmg>0) ? Math.max(0, cur - dmg) : Math.min(hpTotal, cur + Math.abs(dmg));
         // salva no token (instância), não na ficha-base
-        await dbUpdate(`rooms/${roomId}/tokens/${sheetTokenId||token?.tokenId}`, { hpCurrent: next, updatedAt: Date.now() });
+        await dbUpdate(`rooms/${roomId}/tokens/${tokenId||token?.tokenId}`, { hpCurrent: next, updatedAt: Date.now() });
         toast(`HP: ${next}/${hpTotal}`, "ok");
       }catch(e){ toast(String(e?.message||e),"error"); }
     };
@@ -2988,4 +2995,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 69 ===
+// === EOF marker: BUILD_ID 71 ===
