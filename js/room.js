@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 73;
+const BUILD_ID = 74;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -732,7 +732,9 @@ function beginPointerAt(sx,sy){
     pan=false;
   }else{
     dragging=null;
-    pan=true;
+    // IMPORTANT (mobile): when touching an openable-but-not-draggable token, don't start panning.
+    // This prevents tiny finger movement from turning taps into pan and breaking double-tap to open sheet.
+    pan = !(hit && canOpenSheet(hit.id, hit.t));
   }
 }
 
@@ -830,7 +832,7 @@ async function endPointerAt(sx,sy){
   // Click / tap
   // - Single click selects token (no sheet)
   // - Sheet opens only on double-click/double-tap
-  const tapDist = (lastPointerType === "touch") ? 60 : 20;
+  const tapDist = ((lastPointerType === "touch") ? 60 : 20) * (dpr||1);
   if(dist <= tapDist){
     const w=screenToWorld(sx,sy);
     const hit=hitToken(w.x,w.y);
@@ -844,7 +846,7 @@ async function endPointerAt(sx,sy){
 
       if(canOpenSheet(hit.id, hit.t)){
         const now=Date.now();
-        const dblMs = (lastPointerType === "touch") ? 500 : 350;
+        const dblMs = (lastPointerType === "touch") ? 700 : 350;
         if(lastTap.tokenId===hit.id && (now-lastTap.time) <= dblMs){
           lastTap.time=0; lastTap.tokenId=null;
           openSheetWindow(hit.id, sx, sy).catch(()=>{});
@@ -3007,4 +3009,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 73 ===
+// === EOF marker: BUILD_ID 74 ===
