@@ -40,7 +40,7 @@
 
         "characters": {
           "$charId": {
-            ".read": "auth != null && data.parent().parent().child('players').child(auth.uid).exists()",
+            ".read": "auth != null && (data.parent().parent().child('masterUid').val() === auth.uid || data.child('ownerUid').val() === auth.uid || root.child('rooms').child($roomId).child('players').child(auth.uid).child('characterId').val() === $charId)",
             ".write": "auth != null && (data.parent().parent().child('masterUid').val() === auth.uid || newData.child('ownerUid').val() === auth.uid)"
           }
         },

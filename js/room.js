@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 71;
+const BUILD_ID = 72;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -53,13 +53,28 @@ function canEditToken(tokenId, t){
   return !!(myTok && tokenId && tokenId===myTok);
 }
 function canOpenSheet(tokenId, t){
+  // Master can open any sheet
   if(isMaster()) return true;
-  if(t?.ownerUid && me && t.ownerUid===me.uid) return true;
-  const myTok = players?.[me?.uid]?.tokenId;
-  if(myTok && tokenId && tokenId===myTok) return true;
-  const myChar = players?.[me?.uid]?.characterId;
-  return !!(myChar && t?.linkedCharId===myChar);
+
+  // Need an authenticated user
+  const uid = me?.uid;
+  if(!uid || !tokenId) return false;
+
+  // Players can open:
+  // - tokens they own
+  if(t?.ownerUid && t.ownerUid === uid) return true;
+
+  // - their "assigned token" (player token)
+  const myTok = players?.[uid]?.tokenId;
+  if(myTok && tokenId === myTok) return true;
+
+  // - tokens linked to their assigned characterId (common when GM created the token but linked it to the player character)
+  const myChar = players?.[uid]?.characterId;
+  if(myChar && t?.linkedCharId === myChar) return true;
+
+  return false;
 }
+
 
 function setHeader(){
   $("#roomTitle").textContent = room?.roomMeta?.name || "Sala";
@@ -929,22 +944,7 @@ canvas.addEventListener("wheel",(e)=>{
   mapRender();
 },{passive:false});
 
-// touch
-canvas.addEventListener("touchstart",(e)=>{
-  const t0=e.touches[0]; if(!t0) return;
-  const rect=canvas.getBoundingClientRect();
-  const sx=(t0.clientX-rect.left)*dpr, sy=(t0.clientY-rect.top)*dpr;
-  beginPointerAt(sx,sy);
-},{passive:true});
-canvas.addEventListener("touchmove",(e)=>{
-  const t0=e.touches[0]; if(!t0) return;
-  const rect=canvas.getBoundingClientRect();
-  const sx=(t0.clientX-rect.left)*dpr, sy=(t0.clientY-rect.top)*dpr;
-  movePointerAt(sx,sy);
-},{passive:true});
-canvas.addEventListener("touchend",()=>{
-  endPointerAt(last.sx,last.sy);
-},{passive:true});
+/* touch handlers removed: pointer events handle touch reliably */
 
 /* =================== Rolls helpers =================== */
 
@@ -1209,6 +1209,7 @@ function _makeSheetWindowEl(){
 function openSheetWindow(tokenId, sx=null, sy=null){
   const t=tokens?.[tokenId];
   if(!t) return;
+  if(!canOpenSheet(tokenId, t)) { toast("Sem permissão para abrir esta ficha.","error"); return; }
   const char=getCharByToken(tokenId);
   if(!char){ toast("Token sem ficha.", "error"); return; }
 
@@ -2995,4 +2996,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 71 ===
+// === EOF marker: BUILD_ID 72 ===
