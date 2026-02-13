@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 68;
+const BUILD_ID = 69;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -603,6 +603,7 @@ let fogBrush=160;
 let fogMode="paint";
 let paintingFog=false;
 let keyMDown=false;
+let keyShiftDown=false;
 let placingMarker=false;
 async function applyFogAt(wx, wy){
   if(!isMaster() || !room?.settings?.fog?.enabled) return;
@@ -638,6 +639,7 @@ async function createMarkerAt(wx, wy){
 /* =================== MAP INTERACTION =================== */
 let down=false, dragging=null, pan=true;
 let resizing=null; // token resize state (master only)
+let mapResizing=null; // map resize state (master only, Shift+M drag)
 let startPt={sx:0,sy:0};
 let last={sx:0,sy:0};
 let lastClickWorld={x:0,y:0};
@@ -681,6 +683,16 @@ function beginPointerAt(sx,sy){
   const hit=hitToken(w.x,w.y);
   selectedTokenId = hit?.id || null;
 
+  // Map resize mode: hold Shift+M and drag anywhere to resize the map (master only)
+  if(isMaster() && keyMDown && keyShiftDown){
+    const ms = getMapWorldSize();
+    const mw = Math.max(1, num(room?.settings?.map?.w, 0) || ms.w);
+    const mh = Math.max(1, num(room?.settings?.map?.h, 0) || ms.h);
+    mapResizing = { startW: mw, startH: mh, startX: w.x, startY: w.y };
+    resizing=null; dragging=null; pan=false;
+    return;
+  }
+
   if(isMaster() && keyMDown && hit && canEditToken(hit.id, hit.t)){
     // Resize mode: hold M and drag to scale token proportionally
     const cx=num(hit.t.x,0), cy=num(hit.t.y,0);
@@ -708,6 +720,21 @@ function movePointerAt(sx,sy){
 
   if(paintingFog){ applyFogAt(w.x,w.y).catch(()=>{}); return; }
 
+  if(mapResizing){
+    const dx = w.x - mapResizing.startX;
+    const dy = w.y - mapResizing.startY;
+    const nw = Math.max(1, mapResizing.startW + dx);
+    const nh = Math.max(1, mapResizing.startH + dy);
+    room = room || {};
+    room.settings = room.settings || {};
+    room.settings.map = room.settings.map || {};
+    room.settings.map.w = nw;
+    room.settings.map.h = nh;
+    clampView();
+    mapRender();
+    return;
+  }
+
   if(resizing){
     const t=tokens[resizing.id];
     if(t){
@@ -715,7 +742,7 @@ function movePointerAt(sx,sy){
       const dist=Math.max(0.01, Math.sqrt(dx*dx+dy*dy));
       const ratio=dist/resizing.startDist;
       let sc=resizing.startScale*ratio;
-      sc=Math.max(0.25, Math.min(4, sc));
+      sc=Math.max(0.001, sc);
       t.scale=sc;
       mapRender();
     }
@@ -739,6 +766,17 @@ async function endPointerAt(sx,sy){
   down=false;
 
   if(paintingFog){ paintingFog=false; return; }
+
+  if(mapResizing){
+    const nw = Math.max(1, num(room?.settings?.map?.w, 0));
+    const nh = Math.max(1, num(room?.settings?.map?.h, 0));
+    mapResizing=null;
+    try{
+      await dbUpdate(`rooms/${roomId}/settings/map`, { w: nw, h: nh });
+      toast(`Mapa redimensionado: ${Math.round(nw)} x ${Math.round(nh)}`,"ok");
+    }catch(err){ toast(String(err?.message||err),"error"); }
+    return;
+  }
 
   if(resizing){
     const id=resizing.id;
@@ -881,7 +919,7 @@ canvas.addEventListener("contextmenu",(ev)=>{
 canvas.addEventListener("wheel",(e)=>{
   e.preventDefault();
   const delta=Math.sign(e.deltaY);
-  zoom = Math.max(0.02, Math.min(6.0, zoom + (delta>0?-0.1:0.1)));
+  zoom = Math.max(0.0005, zoom + (delta>0?-0.1:0.1));
   if(isMaster()) dbUpdate(`rooms/${roomId}/settings/map`, { zoom }).catch(()=>{});
   clampView();
   mapRender();
@@ -1780,6 +1818,7 @@ function isEditableTarget(el){
 window.addEventListener("keydown",(e)=>{
   // global keys
   if(e.key==="m"||e.key==="M") keyMDown=true;
+  if(e.key==="Shift") keyShiftDown=true;
   if(e.key==='`'){ dbgOn=!dbgOn; dbg.style.display=dbgOn?'block':'none'; }
 
   // GM-only clipboard / visibility controls
@@ -1911,7 +1950,7 @@ window.addEventListener("keydown",(e)=>{
     return;
   }
 });
-window.addEventListener("keyup",(e)=>{ if(e.key==="m"||e.key==="M") keyMDown=false; });
+window.addEventListener("keyup",(e)=>{ if(e.key==="m"||e.key==="M") keyMDown=false; if(e.key==="Shift") keyShiftDown=false; });
 function setDbg(txt){ if(!dbgOn) return; dbg.textContent=txt; }
 
 fab.onclick=()=>{ toolsState.open=!toolsState.open; syncToolsUI(); };
@@ -2015,7 +2054,7 @@ modal.querySelector("#tFile").onchange = ()=>{ modal.querySelector("#btnUp").cli
         name: clampLen(modal.querySelector("#tName").value, 60),
         // IMPORTANT: do not truncate Base64 DataURLs; it breaks token images (ERR_INVALID_URL).
         spriteUrl: clampImageUrl(modal.querySelector("#tSprite").value, 420),
-        scale: Math.max(0.1, num(modal.querySelector("#tScale").value, 1)),
+        scale: Math.max(0.001, num(modal.querySelector("#tScale").value, 1)),
         z: Math.trunc(num(modal.querySelector("#tZ").value, 0)),
         updatedAt: Date.now(),
         inMarkerId: null,
@@ -2498,11 +2537,11 @@ function syncToolsUI(){
         <div class="grid2" style="margin-top:12px">
           <div>
             <label class="label">Largura do mapa (px mundo)</label>
-            <input id="mapW" type="number" min="200" step="50" value="${num(room?.settings?.map?.w, 0) || ""}" placeholder="(auto)" />
+            <input id="mapW" type="number" step="50" value="${num(room?.settings?.map?.w, 0) || ""}" placeholder="(auto)" />
           </div>
           <div>
             <label class="label">Altura do mapa (px mundo)</label>
-            <input id="mapH" type="number" min="200" step="50" value="${num(room?.settings?.map?.h, 0) || ""}" placeholder="(auto)" />
+            <input id="mapH" type="number" step="50" value="${num(room?.settings?.map?.h, 0) || ""}" placeholder="(auto)" />
           </div>
         </div>
         <div class="actions" style="margin-top:10px; gap:8px; flex-wrap:wrap">
@@ -2528,6 +2567,28 @@ function syncToolsUI(){
       await dbUpdate(`rooms/${roomId}/settings/map`, { bgUrl: dataUrl });
       toast("Mapa atualizado.","ok");
     };
+
+    const mapSizeSave = body.querySelector("#mapSizeSave");
+    const mapSizeAuto = body.querySelector("#mapSizeAuto");
+    if(mapSizeSave) mapSizeSave.onclick = async ()=>{
+      try{
+        const wv = num(body.querySelector("#mapW")?.value, 0);
+        const hv = num(body.querySelector("#mapH")?.value, 0);
+        const patch = {};
+        if(wv>0) patch.w = wv;
+        if(hv>0) patch.h = hv;
+        if(Object.keys(patch).length===0){ patch.w = 0; patch.h = 0; }
+        await dbUpdate(`rooms/${roomId}/settings/map`, patch);
+        toast("Tamanho do mapa salvo.","ok");
+      }catch(e){ toast(String(e?.message||e),"error"); }
+    };
+    if(mapSizeAuto) mapSizeAuto.onclick = async ()=>{
+      try{
+        await dbUpdate(`rooms/${roomId}/settings/map`, { w:0, h:0 });
+        toast("Tamanho do mapa em modo automático.","ok");
+      }catch(e){ toast(String(e?.message||e),"error"); }
+    };
+
     return;
   }
 
@@ -2927,4 +2988,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 68 ===
+// === EOF marker: BUILD_ID 69 ===
