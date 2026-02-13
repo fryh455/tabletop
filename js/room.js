@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 75;
+const BUILD_ID = 76;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -48,12 +48,20 @@ function clearSubs(){ unsub.forEach(fn=>fn&&fn()); unsub=[]; }
 function isMaster(){ return (me && room && room.masterUid===me.uid) || role==="master"; }
 function canEditToken(tokenId, t){
   if(isMaster()) return true;
-  if(t?.ownerUid && me && t.ownerUid===me.uid) return true;
-  // Fallback: allow editing only the token explicitly assigned to the player (if present).
-  // Safe because firebase rules prevent players from changing this assignment.
-  const myTok = players?.[me?.uid]?.tokenId;
-  return !!(myTok && tokenId && tokenId===myTok);
+  const uid = me?.uid;
+  if(!uid || !tokenId) return false;
+
+  // Support legacy ownership field names.
+  const owner = t?.ownerUid || t?.owner || t?.playerUid || t?.uidOwner || null;
+  if(owner && owner === uid) return true;
+
+  // Legacy fallback: only if token has NO owner field at all.
+  const myTok = players?.[uid]?.tokenId || players?.[uid]?.token || null;
+  if(myTok && tokenId === myTok && !owner) return true;
+
+  return false;
 }
+
 function canOpenSheet(tokenId, t){
   // Master can open any sheet
   if(isMaster()) return true;
@@ -61,13 +69,13 @@ function canOpenSheet(tokenId, t){
   const uid = me?.uid;
   if(!uid || !tokenId) return false;
 
-  // Players can open ONLY their own token (or the token assigned to them in players/{uid}.tokenId).
   // Support legacy token ownership field names as well.
   const owner = t?.ownerUid || t?.owner || t?.playerUid || t?.uidOwner || null;
   if(owner && owner === uid) return true;
 
+  // Legacy fallback: only if token has NO owner field at all.
   const myTok = players?.[uid]?.tokenId || players?.[uid]?.token || null;
-  if(myTok && tokenId === myTok) return true;
+  if(myTok && tokenId === myTok && !owner) return true;
 
   return false;
 }
@@ -202,6 +210,49 @@ panelRoot.innerHTML = `
 `;
 const canvas = $("#mapCanvas");
 const ctx = canvas.getContext("2d");
+
+// --- Mobile: floating "Abrir ficha" button when selecting your own token ---
+const isCoarsePointer = (()=>{
+  try{ return window.matchMedia && window.matchMedia("(pointer: coarse)").matches; }catch(e){ return false; }
+})();
+let mobileOpenSheetBtn = null;
+function ensureMobileOpenSheetBtn(){
+  if(mobileOpenSheetBtn) return;
+  mobileOpenSheetBtn = document.createElement("button");
+  mobileOpenSheetBtn.id = "mobileOpenSheetBtn";
+  mobileOpenSheetBtn.textContent = "Abrir ficha";
+  mobileOpenSheetBtn.style.position = "fixed";
+  mobileOpenSheetBtn.style.right = "14px";
+  mobileOpenSheetBtn.style.bottom = "14px";
+  mobileOpenSheetBtn.style.zIndex = "9999";
+  mobileOpenSheetBtn.style.padding = "12px 14px";
+  mobileOpenSheetBtn.style.borderRadius = "14px";
+  mobileOpenSheetBtn.style.boxShadow = "0 10px 24px rgba(0,0,0,.35)";
+  mobileOpenSheetBtn.style.display = "none";
+  mobileOpenSheetBtn.addEventListener("click", (ev)=>{
+    ev.preventDefault();
+    ev.stopPropagation();
+    try{
+      const id = selectedTokenId;
+      const t = id ? tokens?.[id] : null;
+      if(id && t && canOpenSheet(id, t)){
+        openSheetWindow(id).catch(err=>toast(String(err?.message||err),"error"));
+      }
+    }catch(e){
+      toast(String(e?.message||e),"error");
+    }
+  }, {passive:false});
+  document.body.appendChild(mobileOpenSheetBtn);
+}
+function updateMobileOpenSheetBtn(){
+  if(!isCoarsePointer) return;
+  ensureMobileOpenSheetBtn();
+  const id = selectedTokenId;
+  const t = id ? tokens?.[id] : null;
+  const show = !!(id && t && !isMaster() && canOpenSheet(id, t));
+  mobileOpenSheetBtn.style.display = show ? "block" : "none";
+}
+
 let dpr=1;
 let zoom=1;
 let gridSize=48;
@@ -509,6 +560,7 @@ function mapRender(){
   }catch(e){
     // Never throw in render loop.
   }
+  updateMobileOpenSheetBtn();
 }
 
 function drawTokens(){
@@ -3041,4 +3093,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 75 ===
+// === EOF marker: BUILD_ID 76 ===
