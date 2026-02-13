@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 67;
+const BUILD_ID = 68;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -1766,6 +1766,17 @@ dbg.id="sur4Debug";
 dbg.style.cssText="position:fixed; left:10px; bottom:10px; z-index:200; font:12px ui-monospace, SFMono-Regular, Menlo, monospace; padding:8px 10px; border-radius:12px; background:rgba(0,0,0,.45); border:1px solid rgba(255,255,255,.10); color:#eaf2ff; display:none; max-width:70vw";
 document.body.appendChild(dbg);
 let dbgOn=false;
+function isEditableTarget(el){
+  if(!el) return false;
+  const tag = (el.tagName||"").toLowerCase();
+  if(tag==="input"||tag==="textarea"||tag==="select") return true;
+  if(el.isContentEditable) return true;
+  // elements inside contenteditable
+  let p = el.parentElement;
+  while(p){ if(p.isContentEditable) return true; p = p.parentElement; }
+  return false;
+}
+
 window.addEventListener("keydown",(e)=>{
   // global keys
   if(e.key==="m"||e.key==="M") keyMDown=true;
@@ -1793,6 +1804,10 @@ window.addEventListener("keydown",(e)=>{
 
   // Ctrl/Cmd combos (GM-only)
   const combo = (e.ctrlKey || e.metaKey);
+
+  // Don't steal normal typing inside inputs/textareas/contenteditable
+  if(isEditableTarget(e.target) && !e.shiftKey && !combo) return;
+
   if(gm && combo){
     const k = (e.key||"").toLowerCase();
 
@@ -1857,7 +1872,7 @@ window.addEventListener("keydown",(e)=>{
   }
 
   // C: center view on selected token (GM or player)
-  if(e.key==="c" || e.key==="C"){
+  if(e.shiftKey && !combo && !e.altKey && (e.key==="c" || e.key==="C")){
     let id = selectedTokenId;
     if(id && id.startsWith("ghost_")) id = null;
     if(!id){
@@ -1877,7 +1892,7 @@ window.addEventListener("keydown",(e)=>{
   }
 
   // T: cycle tokens (GM: all visible; player: only controlled)
-  if(e.key==="t" || e.key==="T"){
+  if(e.shiftKey && !combo && !e.altKey && (e.key==="t" || e.key==="T")){
     const uid = me?.uid || "";
     const list = Object.entries(tokens||{})
       .filter(([id,t])=> !(t && t.visible===false) && !(t && t.inMarkerId))
@@ -2912,4 +2927,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 67 ===
+// === EOF marker: BUILD_ID 68 ===
