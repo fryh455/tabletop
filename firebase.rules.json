@@ -34,7 +34,8 @@
         "players": {
           "$uid": {
             ".read": "auth != null && data.parent().parent().child('players').child(auth.uid).exists()",
-            ".write": "auth != null && ($uid === auth.uid || data.parent().parent().child('masterUid').val() === auth.uid)"
+            ".write": "auth != null && ($uid === auth.uid || data.parent().parent().child('masterUid').val() === auth.uid)",
+            ".validate": "data.parent().parent().child('masterUid').val() === auth.uid || ($uid === auth.uid && newData.child('uid').val() === auth.uid && (( !data.exists() && (!newData.child('tokenId').exists() || newData.child('tokenId').val() === null) && (!newData.child('characterId').exists() || newData.child('characterId').val() === null) ) || ( data.exists() && newData.child('tokenId').val() === data.child('tokenId').val() && newData.child('characterId').val() === data.child('characterId').val() )))"
           }
         },
 

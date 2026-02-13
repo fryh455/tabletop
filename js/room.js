@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 74;
+const BUILD_ID = 75;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -49,6 +49,8 @@ function isMaster(){ return (me && room && room.masterUid===me.uid) || role==="m
 function canEditToken(tokenId, t){
   if(isMaster()) return true;
   if(t?.ownerUid && me && t.ownerUid===me.uid) return true;
+  // Fallback: allow editing only the token explicitly assigned to the player (if present).
+  // Safe because firebase rules prevent players from changing this assignment.
   const myTok = players?.[me?.uid]?.tokenId;
   return !!(myTok && tokenId && tokenId===myTok);
 }
@@ -660,6 +662,7 @@ async function createMarkerAt(wx, wy){
 
 /* =================== MAP INTERACTION =================== */
 let down=false, dragging=null, pan=true;
+let panCandidate=false; // touch convenience: allow tap on token without immediately entering pan; switch to pan if finger moves enough
 let resizing=null; // token resize state (master only)
 let mapResizing=null; // map resize state (master only, Shift+M drag)
 let startPt={sx:0,sy:0};
@@ -732,9 +735,10 @@ function beginPointerAt(sx,sy){
     pan=false;
   }else{
     dragging=null;
-    // IMPORTANT (mobile): when touching an openable-but-not-draggable token, don't start panning.
-    // This prevents tiny finger movement from turning taps into pan and breaking double-tap to open sheet.
-    pan = !(hit && canOpenSheet(hit.id, hit.t));
+    // Mobile-friendly: when touching an openable-but-not-draggable token, don't start panning immediately.
+    // But if the finger moves enough, we will switch to pan in movePointerAt().
+    panCandidate = !!(hit && canOpenSheet(hit.id, hit.t));
+    pan = !panCandidate;
   }
 }
 
@@ -777,18 +781,31 @@ function movePointerAt(sx,sy){
   if(dragging){
     const nx=w.x-dragging.ox, ny=w.y-dragging.oy;
     if(tokens[dragging.id]){ tokens[dragging.id].x=nx; tokens[dragging.id].y=ny; mapRender(); }
-  }else if(pan){
+  }else{
+    if(!pan && panCandidate){
+      const mdx = (sx-startPt.sx), mdy=(sy-startPt.sy);
+      const moved = Math.sqrt(mdx*mdx+mdy*mdy);
+      const switchDist = 30 * (dpr||1);
+      if(moved > switchDist){
+        pan = true;
+        panCandidate = false;
+        last = {sx,sy};
+      }
+    }
+    if(pan){
     view.x -= (sx-last.sx)/(zoom*dpr);
     view.y -= (sy-last.sy)/(zoom*dpr);
     clampView();
     last={sx,sy};
     mapRender();
+    }
   }
 }
 
 async function endPointerAt(sx,sy){
   if(!down) return;
   down=false;
+  panCandidate = false;
 
   if(paintingFog){ paintingFog=false; return; }
 
@@ -880,6 +897,21 @@ canvas.addEventListener("pointerdown",(ev)=>{
     lastPointerType = ev.pointerType || "mouse";
     canvas.setPointerCapture?.(ev.pointerId);
     const {sx,sy}=getScreenXY(ev);
+    // Extra mobile robustness: detect double-tap on pointerdown (touch) before pan/drag can steal the gesture.
+    if(lastPointerType === "touch"){
+      const w=screenToWorld(sx,sy);
+      const hit=hitToken(w.x,w.y);
+      if(hit && canOpenSheet(hit.id, hit.t)){
+        const now=Date.now();
+        const dblMs = 700;
+        if(lastTap.tokenId===hit.id && (now-lastTap.time) <= dblMs){
+          lastTap.time=0; lastTap.tokenId=null;
+          openSheetWindow(hit.id, sx, sy).catch(()=>{});
+          down=false; dragging=null; pan=true; panCandidate=false;
+          return;
+        }
+      }
+    }
     beginPointerAt(sx,sy);
   }catch(e){ /* ignore */ }
 },{passive:false});
@@ -3009,4 +3041,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 74 ===
+// === EOF marker: BUILD_ID 75 ===
