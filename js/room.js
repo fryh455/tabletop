@@ -1,6 +1,6 @@
 /* SUR4 ROOM BUILD 67 */
 /* SUR4 ROOM BUILD 67 */
-const BUILD_ID = 72;
+const BUILD_ID = 73;
 import { $, $$, bindModal, openModal, closeModal, toast, goHome, esc, clampLen, num, uidShort } from "./app.js";
 import { initFirebase, onAuth, logout, dbGet, dbSet, dbUpdate, dbPush, dbOn } from "./firebase.js";
 import { roll as rollDice } from "./sur4.js";
@@ -56,24 +56,20 @@ function canOpenSheet(tokenId, t){
   // Master can open any sheet
   if(isMaster()) return true;
 
-  // Need an authenticated user
   const uid = me?.uid;
   if(!uid || !tokenId) return false;
 
-  // Players can open:
-  // - tokens they own
-  if(t?.ownerUid && t.ownerUid === uid) return true;
+  // Players can open ONLY their own token (or the token assigned to them in players/{uid}.tokenId).
+  // Support legacy token ownership field names as well.
+  const owner = t?.ownerUid || t?.owner || t?.playerUid || t?.uidOwner || null;
+  if(owner && owner === uid) return true;
 
-  // - their "assigned token" (player token)
-  const myTok = players?.[uid]?.tokenId;
+  const myTok = players?.[uid]?.tokenId || players?.[uid]?.token || null;
   if(myTok && tokenId === myTok) return true;
-
-  // - tokens linked to their assigned characterId (common when GM created the token but linked it to the player character)
-  const myChar = players?.[uid]?.characterId;
-  if(myChar && t?.linkedCharId === myChar) return true;
 
   return false;
 }
+
 
 
 function setHeader(){
@@ -173,7 +169,18 @@ function subAll(){
   unsub.push(dbOn(`rooms/${roomId}`, (v)=>{ if(v){ room=v; setHeader(); mapRender(); syncToolsUI(); } }));
   unsub.push(dbOn(`rooms/${roomId}/players`, (v)=>{ players=v||{}; if(me) role = (room?.masterUid===me.uid) ? "master" : (players?.[me.uid]?.role || "player"); syncToolsUI(); }));
   unsub.push(dbOn(`rooms/${roomId}/tokens`, (v)=>{ tokens=v||{}; mapRender(); syncToolsUI(); }));
-  unsub.push(dbOn(`rooms/${roomId}/characters`, (v)=>{ characters=v||{}; syncToolsUI(); refreshOpenSheets(); }));
+  // Characters (sheets): master gets all; players only get their own character
+  if(isMaster()){
+    unsub.push(dbOn(`rooms/${roomId}/characters`, (v)=>{ characters=v||{}; syncToolsUI(); refreshOpenSheets(); }));
+  }else{
+    const uid = me?.uid;
+    const myCharId = uid ? (players?.[uid]?.characterId || null) : null;
+    if(myCharId){
+      unsub.push(dbOn(`rooms/${roomId}/characters/${myCharId}`, (v)=>{ characters = v ? {[myCharId]: v} : {}; syncToolsUI(); refreshOpenSheets(); }));
+    }else{
+      characters = {}; syncToolsUI(); refreshOpenSheets();
+    }
+  }
   unsub.push(dbOn(`rooms/${roomId}/markers`, (v)=>{ markers=v||{}; mapRender(); syncToolsUI(); }));
   unsub.push(dbOn(`rooms/${roomId}/advCounts`, (v)=>{ advCounts=v||{}; if(isMaster()) refreshOpenSheets(); }));
   unsub.push(dbOn(`rooms/${roomId}/rolls`, (v)=>{ rolls=v||{}; syncToolsUI(); }));
@@ -823,7 +830,7 @@ async function endPointerAt(sx,sy){
   // Click / tap
   // - Single click selects token (no sheet)
   // - Sheet opens only on double-click/double-tap
-  const tapDist = (lastPointerType === "touch") ? 35 : 20;
+  const tapDist = (lastPointerType === "touch") ? 60 : 20;
   if(dist <= tapDist){
     const w=screenToWorld(sx,sy);
     const hit=hitToken(w.x,w.y);
@@ -1206,11 +1213,15 @@ function _makeSheetWindowEl(){
   return el;
 }
 
-function openSheetWindow(tokenId, sx=null, sy=null){
+async function openSheetWindow(tokenId, sx=null, sy=null){
   const t=tokens?.[tokenId];
   if(!t) return;
   if(!canOpenSheet(tokenId, t)) { toast("Sem permissão para abrir esta ficha.","error"); return; }
-  const char=getCharByToken(tokenId);
+  let char=getCharByToken(tokenId);
+  // If player did not subscribe to this character yet, fetch on-demand (rules will enforce).
+  if(!char && t?.linkedCharId){
+    try{ const v = await dbGet(`rooms/${roomId}/characters/${t.linkedCharId}`); if(v) { characters[t.linkedCharId]=v; char=v; } }catch(e){}
+  }
   if(!char){ toast("Token sem ficha.", "error"); return; }
 
   const el=_makeSheetWindowEl();
@@ -2996,4 +3007,4 @@ function readFileAsDataURL(file){
   });
 }
 
-// === EOF marker: BUILD_ID 72 ===
+// === EOF marker: BUILD_ID 73 ===
