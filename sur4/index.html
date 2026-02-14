@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SUR4 Tabletop (Sync MVP)</title>
+
+  <!-- IMPORTANT: works under ANY subpath like /repo/sur4/ -->
+  <base href="./" />
+
+  <link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <header id="topbar">
+      <div id="brand">SUR4 Tabletop (Sync MVP)</div>
+      <div id="session-badge"></div>
+
+      <div id="topbar-actions">
+        <button id="btn-room" type="button">Sala</button>
+        <button id="btn-lock" type="button" data-on="0" class="hidden">Mapa: LIVRE</button>
+        <button id="btn-fog" type="button" data-on="0" class="hidden">Fog: OFF</button>
+        <button id="btn-fog-image" type="button" class="hidden">Imagem Fog</button>
+        <button id="btn-sync-view" type="button" data-on="0" class="hidden">Sync View: OFF</button>
+        <button id="btn-zoom-minus" type="button" class="hidden">-</button>
+        <button id="btn-zoom-plus" type="button" class="hidden">+</button>
+
+        <button id="btn-export" type="button" class="hidden">Export</button>
+        <button id="btn-switch-user" type="button">Sair</button>
+      </div>
+    </header>
+
+    <main id="main">
+      <section id="canvas-pane">
+        <div id="canvas-toolbar">
+          <button id="btn-add-token" type="button" class="hidden">+ Token</button>
+          <button id="btn-snap" type="button" data-on="0">Snap: OFF</button>
+          <div id="hint">Arraste tokens. Scroll=zoom (local). Shift+arrastar=pan. (Mestre: pode sincronizar view)</div>
+        </div>
+        <canvas id="tabletop-canvas"></canvas>
+      </section>
+
+      <aside id="side-pane">
+        <div class="tabs">
+          <button class="tab" data-tab="sheets" aria-selected="true">Fichas</button>
+          <button class="tab" data-tab="inspector">Token</button>
+          <button class="tab" data-tab="rolls">Rolls</button>
+        </div>
+
+        <div id="tab-sheets" class="tab-panel">
+          <div id="sheets-actions" class="row-gap">
+            <button id="btn-create-sheet" type="button" class="hidden">+ Criar ficha</button>
+            <div class="muted small">Jogador vê só a própria ficha.</div>
+          </div>
+          <div id="sheets-list"></div>
+          <div id="sheet-view"></div>
+        </div>
+
+        <div id="tab-inspector" class="tab-panel hidden">
+          <div id="inspector-empty">Selecione um token.</div>
+          <div id="inspector"></div>
+        </div>
+
+        <div id="tab-rolls" class="tab-panel hidden">
+          <div id="rolls-list"></div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- LOGIN / ROOM MODAL -->
+  <div id="modal-login" class="modal-overlay" aria-hidden="false">
+    <div class="modal">
+      <h2>Entrar</h2>
+      <p class="muted">Sincronização real via Firebase Realtime DB. (Auth anônimo)</p>
+
+      <div class="form-row">
+        <label for="login-name">Nome</label>
+        <input id="login-name" type="text" maxlength="24" placeholder="Seu nome" autocomplete="off" />
+      </div>
+
+      <div class="grid-2">
+        <button id="btn-create-room" type="button">Criar mesa</button>
+        <button id="btn-join-room" type="button">Entrar com código</button>
+      </div>
+
+      <div id="join-area" class="hidden">
+        <div class="form-row">
+          <label for="join-code">Código da mesa</label>
+          <input id="join-code" type="text" maxlength="64" placeholder="ex: room_ab12cd34" autocomplete="off" />
+        </div>
+        <div class="form-row">
+          <button id="btn-confirm-join" type="button">Entrar</button>
+          <button id="btn-cancel-join" type="button" class="secondary">Cancelar</button>
+        </div>
+      </div>
+
+      <div class="muted small" style="margin-top:10px;">
+        Dica: compartilhe a URL com <code>#/room/&lt;codigo&gt;</code>.
+      </div>
+    </div>
+  </div>
+
+  <!-- TOKEN MODAL -->
+  <div id="modal-token" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal">
+      <h2>Novo token</h2>
+      <div class="form-row">
+        <label for="token-owner-uid">Vincular ao player (uid) opcional</label>
+        <input id="token-owner-uid" type="text" maxlength="80" placeholder="uid (deixe vazio p/ mestre controlar)" autocomplete="off" />
+      </div>
+      <div class="form-row">
+        <label for="token-size">Tamanho (px)</label>
+        <input id="token-size" type="number" min="24" step="1" value="64" />
+      </div>
+      <div class="form-row">
+        <label for="token-file">Imagem</label>
+        <input id="token-file" type="file" accept="image/*" />
+      </div>
+      <div class="form-row">
+        <button id="token-create" type="button">Criar</button>
+        <button id="token-cancel" type="button" class="secondary">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOG IMAGE MODAL -->
+  <div id="modal-fog" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal">
+      <h2>Imagem do Fog</h2>
+      <p class="muted small">A imagem fica por cima do mapa; áreas escondidas usam retângulos. A imagem pode ser usada como “névoa” estilizada.</p>
+      <div class="form-row">
+        <label for="fog-file">Imagem</label>
+        <input id="fog-file" type="file" accept="image/*" />
+      </div>
+      <div class="form-row">
+        <label for="fog-opacity">Opacidade (0.0–1.0)</label>
+        <input id="fog-opacity" type="number" min="0" max="1" step="0.05" value="0.6" />
+      </div>
+      <div class="form-row">
+        <button id="fog-apply" type="button">Aplicar</button>
+        <button id="fog-clear" type="button" class="secondary">Remover imagem</button>
+        <button id="fog-cancel" type="button" class="secondary">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHEET MODAL -->
+  <div id="modal-sheet" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal">
+      <h2>Criar ficha</h2>
+
+      <div class="form-row">
+        <label for="sheet-name">Nome do personagem</label>
+        <input id="sheet-name" type="text" maxlength="32" placeholder="Nome" autocomplete="off" />
+      </div>
+
+      <div class="form-row">
+        <label for="sheet-owner-uid">Owner UID (player)</label>
+        <input id="sheet-owner-uid" type="text" maxlength="80" placeholder="cole o uid do jogador" autocomplete="off" />
+      </div>
+
+      <div class="grid-attrs">
+        <div class="form-row">
+          <label for="attr-qi">QI</label>
+          <input id="attr-qi" type="number" min="-2" max="6" value="1" />
+        </div>
+        <div class="form-row">
+          <label for="attr-for">FOR</label>
+          <input id="attr-for" type="number" min="-2" max="6" value="1" />
+        </div>
+        <div class="form-row">
+          <label for="attr-dex">DEX</label>
+          <input id="attr-dex" type="number" min="-2" max="6" value="1" />
+        </div>
+        <div class="form-row">
+          <label for="attr-vig">VIG</label>
+          <input id="attr-vig" type="number" min="-2" max="6" value="1" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <button id="sheet-create" type="button">Criar</button>
+        <button id="sheet-cancel" type="button" class="secondary">Cancelar</button>
+      </div>
+
+      <p class="muted small">Obs: inventário/vantagens/notas são editados dentro da ficha.</p>
+    </div>
+  </div>
+
+  <!-- ROLL MODAL -->
+  <div id="modal-roll" class="modal-overlay hidden" aria-hidden="true">
+    <div class="modal">
+      <h2>Rolagem</h2>
+      <div id="roll-summary"></div>
+      <div class="form-row">
+        <button id="roll-close" type="button">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
