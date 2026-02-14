@@ -82,4 +82,3 @@ export async function deleteSheet(sheetId) {
 }
 
 // --- Exports (module contract)
-export { createSheet, updateSheet, deleteSheet };

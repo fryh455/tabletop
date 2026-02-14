@@ -65,4 +65,3 @@ export async function joinRoom(roomId){
 }
 
 // --- Exports (module contract)
-export { joinRoom };

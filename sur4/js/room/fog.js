@@ -95,4 +95,3 @@ export function areaAffectsUser(area, types, uid, role) {
 }
 
 // --- Exports (module contract)
-export { createFogType, updateFogType, deleteFogType, createFogArea, deleteFogArea };

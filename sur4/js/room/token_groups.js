@@ -81,4 +81,3 @@ export async function removeTokenFromGroup(groupId, tokenId){
 }
 
 // --- Exports (module contract)
-export { createTokenGroup, addTokenToGroup, removeTokenFromGroup, deleteTokenGroup, renameTokenGroup };

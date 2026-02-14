@@ -22,4 +22,3 @@ export async function updateMap(patch) {
 }
 
 // --- Exports (module contract)
-export { updateMap };

@@ -1,4 +1,3 @@
-\
 import { safeUrl } from "../core/security.js";
 
 export function isBase64Image(s){

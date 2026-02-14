@@ -91,4 +91,3 @@ export async function destroyToken(tokenId){
 }
 
 // --- Exports (module contract)
-export { cutToken, pasteToken, cloneToken, hideToken, destroyToken };

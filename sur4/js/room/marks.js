@@ -76,4 +76,3 @@ export async function removeFromMarkStash(markId, kind, idx) {
 }
 
 // --- Exports (module contract)
-export { createMark, updateMark, deleteMark, pushToMarkStash, removeFromMarkStash };

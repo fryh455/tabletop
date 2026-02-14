@@ -84,4 +84,3 @@ export async function moveTokensBatch(pairs){
 }
 
 // --- Exports (module contract)
-export { createToken, updateToken, deleteToken, moveToken, moveTokensBatch };

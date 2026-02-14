@@ -1,4 +1,3 @@
-\
 export function clamp(n, min, max){
   n = Number(n);
   if (!Number.isFinite(n)) return min;
