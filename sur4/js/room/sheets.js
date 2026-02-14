@@ -80,3 +80,6 @@ export async function deleteSheet(sheetId) {
   if (!isMaster(_role)) throw new Error("not_master");
   await dbRemove(dbRef(pSheet(_roomId, sheetId)));
 }
+
+// --- Exports (module contract)
+export { createSheet, updateSheet, deleteSheet };

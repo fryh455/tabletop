@@ -74,3 +74,6 @@ export async function removeFromMarkStash(markId, kind, idx) {
   cur.splice(idx, 1);
   await dbUpdate(dbRef(pMark(_ctx.roomId, markId)), { [key]: cur, updatedAt: nowServer() });
 }
+
+// --- Exports (module contract)
+export { createMark, updateMark, deleteMark, pushToMarkStash, removeFromMarkStash };

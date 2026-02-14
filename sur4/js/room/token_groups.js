@@ -79,3 +79,6 @@ export async function removeTokenFromGroup(groupId, tokenId){
   upd[pTokenGroup(_ctx.roomId, groupId) + "/updatedAt"] = nowServer();
   await dbUpdate(dbRef("/"), upd);
 }
+
+// --- Exports (module contract)
+export { createTokenGroup, addTokenToGroup, removeTokenFromGroup, deleteTokenGroup, renameTokenGroup };

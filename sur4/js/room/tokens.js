@@ -82,3 +82,6 @@ export async function moveTokensBatch(pairs){
   if (Object.keys(upd).length === 0) return;
   await dbUpdate(dbRef("/"), upd);
 }
+
+// --- Exports (module contract)
+export { createToken, updateToken, deleteToken, moveToken, moveTokensBatch };

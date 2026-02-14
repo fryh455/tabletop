@@ -48,3 +48,6 @@ export async function masterClearPlayerFocus(uid){
   assertMaster();
   await dbSet(dbRef(pRoomPlayerCam(_ctx.roomId, uid)), { locked:false, updatedAt: nowServer() });
 }
+
+// --- Exports (module contract)
+export { masterSetCenterAllPlayers, masterSetPlayerFocus, masterClearPlayerFocus };

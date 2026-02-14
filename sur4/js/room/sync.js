@@ -63,3 +63,6 @@ export async function joinRoom(roomId){
 
   return { role };
 }
+
+// --- Exports (module contract)
+export { joinRoom };

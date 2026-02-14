@@ -89,3 +89,6 @@ export async function destroyToken(tokenId){
   assertMaster();
   await deleteToken(tokenId);
 }
+
+// --- Exports (module contract)
+export { cutToken, pasteToken, cloneToken, hideToken, destroyToken };

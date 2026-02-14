@@ -26,3 +26,11 @@ export const pTokenGroup = (roomId, groupId) => `/rooms/${roomId}/tokenGroups/${
 // camera follow
 export const pRoomCam = (roomId) => `/rooms/${roomId}/cam`;
 export const pRoomPlayerCam = (roomId, uid) => `/rooms/${roomId}/playerCam/${uid}`;
+
+// --- Additional single-item helpers (needed by modules)
+export const pMarkStash = (roomId, markId) => `/rooms/${roomId}/marks/${markId}/stash`;
+
+// --- Additional single-item helpers (needed by modules)
+export const pFogType = (roomId, typeId) => `/rooms/${roomId}/fog/types/${typeId}`;
+export const pFogArea = (roomId, areaId) => `/rooms/${roomId}/fog/areas/${areaId}`;
+export const pMark = (roomId, markId) => `/rooms/${roomId}/marks/${markId}`;

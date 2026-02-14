@@ -67,3 +67,6 @@ export async function importSheetsBulk(sheets) {
   }
   return created;
 }
+
+// --- Exports (module contract)
+export { importSheetsBulk };

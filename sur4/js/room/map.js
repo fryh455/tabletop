@@ -20,3 +20,6 @@ export async function updateMap(patch) {
   if (!isMaster(_ctx.role)) throw new Error("not_master");
   await dbUpdate(dbRef(pMap(_ctx.roomId)), { ...(patch||{}), updatedAt: nowServer() });
 }
+
+// --- Exports (module contract)
+export { updateMap };

@@ -93,3 +93,6 @@ export function areaAffectsUser(area, types, uid, role) {
   if (list.length === 0) return true; // applies to all players
   return list.includes(uid);
 }
+
+// --- Exports (module contract)
+export { createFogType, updateFogType, deleteFogType, createFogArea, deleteFogArea };

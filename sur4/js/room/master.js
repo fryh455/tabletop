@@ -62,3 +62,6 @@ export async function assignTokenAndSheet(tokenId, sheetId, ownerUid) {
     updateSheet(sheetId, { ownerUid: ownerUid || null }),
   ]);
 }
+
+// --- Exports (module contract)
+export { setMasterContext, masterCreateTokenQuick, masterCreateSheetQuick, assignTokenAndSheet };
