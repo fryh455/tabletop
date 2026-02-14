@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>SUR4 — Sala</title>
+  <link rel="stylesheet" href="./css/app.css"/>
+  <script>
+    // COLE AQUI seu config:
+    // window.__FIREBASE_CONFIG__ = { apiKey:"", authDomain:"", databaseURL:"", projectId:"" };
+  </script>
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="toastRoot"></div>
+
+  <div id="modalBack" class="modalBack hidden">
+    <div class="modal">
+      <div class="modalTop">
+        <div id="modalTitle" class="modalTitle"></div>
+        <button id="modalClose" type="button" class="modalClose">×</button>
+      </div>
+      <div id="modalBody" class="modalBody"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

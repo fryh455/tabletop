@@ -30,6 +30,6 @@ export function assertFirebaseConfig() {
 
 export function baseUrl(path = "") {
   // Mantém sempre relativo para funcionar em GitHub Pages /sur4/
-  const p = String(path || "").replace(/^\/ +/, "");
+  const p = String(path || "").replace(/^\/+/, "");
   return ENV.BASE_PATH + p;
 }
