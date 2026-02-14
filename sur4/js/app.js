@@ -3,7 +3,7 @@ import { mountToastRoot, toast } from "./ui/toast.js";
 import { mountModal, openModal } from "./ui/modal.js";
 import { initLobby } from "./ui/lobby.js";
 import { initRoomShell } from "./ui/room_shell.js";
-import { initPanelsScaffold } from "./ui/panels/_init_panels.js";
+import { initPanelsScaffold } from "./ui/panels/init_panels.js";
 import { loadSession } from "./core/state.js";
 import { joinRoom } from "./room/sync.js";
 import { mountMapCanvas } from "./ui/canvas/map_canvas.js";
