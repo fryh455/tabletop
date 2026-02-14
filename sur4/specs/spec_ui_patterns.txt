@@ -1,0 +1,15 @@
+SPEC — UI PATTERNS (mínimo)
+
+Lobby:
+- escolher nome (uid lógico) e criar mesa (master) ou entrar por código (player)
+- navega para room.html?room=<roomId>
+
+Mesa:
+- canvas pan/zoom, drag token, seleção
+- fichas: player vê só a dele; master todas (lista só nome/id)
+- click-to-roll: ATTR/DT/ITEM/ADV (mostra modificadores e total no fim)
+- fog: tipos + audience; desenho por strokes paint/erase; aplica somente nos players afetados
+- marcos: master-only; guardar tokens/fichas/itens + notas por área
+- combate: intenções + fases
+- logs/rolls: persist
+- settings: toggles

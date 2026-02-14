@@ -1,0 +1,2 @@
+DIRETÓRIO: /specs
+Entregar apenas TXT (contratos + instruções). Nada de HTML/CSS/JS aqui.

@@ -1,0 +1,29 @@
+DEPLOY (GitHub Pages) — pasta /sur4/
+
+1) Estrutura no repo
+- mantenha a pasta /sur4/ contendo: index.html, room.html, css/, js/, firebase/
+- no GitHub Pages, selecione: Branch = main (ou master), Folder = /(root)  (se você está versionando /sur4/ no root)
+  - A URL final ficará: https://<user>.github.io/<repo>/sur4/
+
+2) Paths IMPORTANTES
+- todo link entre páginas deve ser RELATIVO (./room.html, ./index.html)
+- imports JS/CSS sempre com prefixo ./ (ex.: <script type="module" src="./js/app.js"></script>)
+- nunca use /js/... (root absoluto), porque quebra quando o site está em /<repo>/sur4/
+
+3) Firebase (Realtime DB + Auth)
+- Ative Email/Password no Firebase Auth
+- Crie/Verifique Realtime Database
+- Cole as regras em Firebase Console > Realtime Database > Rules:
+  - use o arquivo: sur4/firebase/rtdb.rules.json
+
+4) Config Firebase no client
+- Para rodar: crie um arquivo ./js/firebase_config.js com:
+  export const FIREBASE_CONFIG = { ... };
+- OU injete no HTML:
+  <script>window.__FIREBASE_CONFIG = {...}</script>
+- OBS: config do Firebase NÃO é “segredo” (não é chave privada). Segurança é feita por RULES.
+
+5) Debug rápido
+- Abra DevTools (F12) e verifique:
+  - requests para firebase database OK (sem CORS)
+  - erros de import path (404) -> quase sempre é caminho errado sem ./

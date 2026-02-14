@@ -1,0 +1,5 @@
+DEPLOY — GitHub Pages + Firebase
+
+- GitHub Pages: deploy /root, use sempre ./ caminhos relativos.
+- Firebase: Auth Anonymous ON, RTDB rules conforme contract_permissions_matrix.
+- Authorized domains: adicionar domínio do GitHub Pages.

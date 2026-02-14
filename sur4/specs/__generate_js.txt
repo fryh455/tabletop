@@ -1,0 +1,2 @@
+DIRETÓRIO: /js
+Neste pacote enxuto, NÃO gerar JS. Apenas contratos TXT.

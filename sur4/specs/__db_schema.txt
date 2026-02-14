@@ -1,0 +1,2 @@
+DB SCHEMA — referência
+Use contract_db_map.txt (paths) + contract_data_map.txt (shapes) como fonte da verdade.

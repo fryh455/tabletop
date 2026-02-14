@@ -1,0 +1,33 @@
+CONTRATO — EVENTOS INTERNOS (imutáveis)
+- ui:toast {type,msg}
+- ui:modal:open {title,html}
+- ui:modal:close {}
+
+- room:join {roomId}
+- room:leave {roomId}
+- room:role {role}
+
+- token:select {tokenId}
+- token:move {tokenId,x,y}
+- token:bulk {tokenIds,action,data}
+
+- sheet:select {sheetId}
+- sheet:update {sheetId,patch}
+
+- roll:open {sheetId,type,key,mode}
+- roll:commit {roll}
+
+- fog:type:setActive {typeId}
+- fog:stroke:add {stroke}
+- fog:type:update {typeId,patch}
+- fog:type:clear {typeId}
+
+- mark:select {markId}
+- mark:update {markId,patch}
+- mark:store {markId,what,refId}
+
+- combat:start {}
+- combat:phase {phase}
+- intentions:update {uid,patch}
+
+- ping:send {x,y}

@@ -1,0 +1,20 @@
+CONTRATO — VALIDAÇÃO/SANITIZAÇÃO
+
+displayName 1..24
+room name 1..40
+token name 0..40
+sheet name 1..40
+notesPlayer 0..2000
+notesMaster 0..4000
+
+mod permitido:
+- soma: /^\+?-?\d+$/
+- mult: /^\*\d+(\.\d+)?$/
+attrUsado: QI|FOR|DEX|VIG|null
+
+fog stroke:
+- max 2000 pontos, compressão por distância
+- width 1..300
+pings TTL 5s e rate-limit
+
+ids: nunca vindos do usuário; usar push/uuid; evitar caracteres inválidos em keys

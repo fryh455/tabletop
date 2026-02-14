@@ -1,0 +1,55 @@
+CONTRATO — DATA MAP (imutável)
+
+RoomMeta: { name, createdAt, masterUid }
+RoomPlayer: { uid, displayName, role, joinedAt }
+Presence: { state, lastSeenAt, client }
+
+MapState: { bgUrl, bgScale, bgX, bgY, gridEnabled, snapEnabled }
+
+Token:
+{ id, name, x, y, layer, size, spriteRef, ownerUid, sheetId, hidden, locked, groupId, updatedAt }
+
+TokenGroup:
+{ id, tokenIds:{[tokenId]:true}, updatedAt }
+
+Sheet:
+{ id, ownerUid, name, idade, peso, altura, attrs:{QI,FOR,DEX,VIG}, mental, notesPlayer, inventory, updatedAt }
+
+Inventory:
+{ usedKg, items:{[itemId]:Item}, advantages:{[advId]:Advantage} }
+
+Item:
+{ id, name, desc, mod, attrUsado }
+
+Advantage:
+{ id, name, desc, mod, dt, attrUsado, notes }
+
+SheetSecrets (master-only):
+{ sheetId, notesMaster, updatedAt }
+
+FogType:
+{ id, name, audience:{[uid]:true}, opacity, fillMode, spriteUrl, updatedAt }
+
+FogStroke:
+{ id, typeId, mode, width, points:[[x,y]...], authorUid, createdAt }
+
+Ping:
+{ id, uid, displayName, x, y, createdAt }
+
+Mark (master-only):
+{ id, name, x, y, notes, stored, updatedAt }
+
+Roll:
+{ id, uid, displayName, sheetId, label, mode, rolls, base, modifiers, total, createdAt, visibility }
+
+LogEntry:
+{ id, type, uid, msg, data, createdAt }
+
+CombatState:
+{ active, turnId, phase, startedAt }
+
+Intentions:
+{ turnId, total, alloc:{attack,move,dodge}, locked, updatedAt }
+
+RoomSettings:
+{ playersCanMoveOwnTokens, playersCanEditMental, playersCanEditInventory, playersCanPanZoom, allowPlayerZoom, lockedMap, gridEnabled, snapEnabled, updatedAt }

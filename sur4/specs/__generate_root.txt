@@ -1,0 +1,2 @@
+DIRETÓRIO: /
+Neste pacote enxuto, NÃO gerar arquivos de root. Apenas contratos TXT.

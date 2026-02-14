@@ -1,0 +1,46 @@
+CONTRATO — DOM MAP (imutável)
+Regra: IDs e data-* abaixo NÃO PODEM mudar. O gerador DEVE usá-los exatamente.
+
+index.html (lobby)
+- #name
+- #btnCreateRoom
+- #roomCode
+- #btnJoinRoom
+- #status
+- #roomsList
+- #toastRoot
+- #modalBack
+- #modalTitle
+- #modalClose
+- #modalBody
+
+room.html (mesa)
+- #roomTitle
+- #me
+- #role
+- #btnHome
+- #btnLeave
+- #btnLogout
+- #mapCanvas
+- #sidebar
+- #toastRoot
+- #modalBack
+- #modalTitle
+- #modalClose
+- #modalBody
+
+Panels (IDs fixos)
+- #tabBar
+- #panelSheets
+- #panelTokens
+- #panelFog
+- #panelMarks
+- #panelCombat
+- #panelLogs
+- #panelSettings
+- #panelRoll
+
+Click-to-roll
+- data-roll-type="ATTR|DT|ITEM|ADV"
+- data-roll-key="QI|FOR|DEX|VIG|head|torso|armL|armR|legL|legR|<itemId>|<advId>"
+- data-sheet-id="<sheetId>"

@@ -1,0 +1,20 @@
+CONTRATO — PERMISSÕES (intenção)
+
+MASTER
+- read/write tudo em /rooms/{roomId}/*
+
+PLAYER read
+- meta, players, presence, settings, map
+- tokens, fog/types, fog/strokes, pings, combat, intentions
+- sheets apenas onde ownerUid == auth.uid
+- rolls apenas visibility="room"
+- NÃO lê marks
+- NÃO lê sheetSecrets
+
+PLAYER write
+- presence/{auth.uid}
+- tokens/{tokenId} somente se ownerUid==auth.uid e settings.playersCanMoveOwnTokens==true e token.locked==false (campos x,y,updatedAt)
+- sheets/{sheetId} somente se ownerUid==auth.uid (mental se habilitado; inventory se habilitado; notesPlayer)
+- intentions/{auth.uid}
+- pings push (rate-limit)
+- rolls push (rate-limit)

@@ -1,0 +1,2 @@
+DIRETÓRIO: /css
+Neste pacote enxuto, NÃO gerar CSS. Apenas contratos TXT.

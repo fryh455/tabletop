@@ -1,0 +1,13 @@
+INSTRUÇÕES DO GERADOR
+Formato obrigatório:
+
+file: <path/arquivo.ext>
+  <conteúdo>
+
+Regras:
+- NÃO renomear IDs DOM (contract_dom_map)
+- NÃO renomear campos (contract_data_map)
+- NÃO renomear paths (contract_db_map)
+- ESM (type=module), sem libs
+- URLs relativas (GitHub Pages subpath)
+- Nunca crashar por null: guards + loading

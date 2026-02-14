@@ -1,0 +1,28 @@
+CONTRATO — DB MAP (RTDB paths imutáveis)
+
+/rooms/{roomId}/meta
+/rooms/{roomId}/players/{uid}
+/rooms/{roomId}/presence/{uid}
+/rooms/{roomId}/settings
+/rooms/{roomId}/map
+
+/rooms/{roomId}/tokens/{tokenId}
+/rooms/{roomId}/tokenGroups/{groupId}
+
+/rooms/{roomId}/sheets/{sheetId}
+/rooms/{roomId}/sheetSecrets/{sheetId}   (master-only)
+
+/rooms/{roomId}/fog/types/{typeId}
+/rooms/{roomId}/fog/strokes/{strokeId}
+
+/rooms/{roomId}/marks/{markId}           (master-only)
+
+/rooms/{roomId}/pings/{pingId}
+
+/rooms/{roomId}/rolls/{rollId}
+/rooms/{roomId}/logs/{logId}
+
+/rooms/{roomId}/combat
+/rooms/{roomId}/intentions/{uid}
+
+/userRooms/{uid}/{roomId} (opcional)

@@ -1,0 +1,13 @@
+SEGURANÇA / REGRAS — resumo
+
+- Segurança real é feita pelas RULES do Realtime DB (sur4/firebase/rtdb.rules.json).
+- Client deve sanitizar:
+  - strings com limite de tamanho (nomes, notas, descrições)
+  - ids sem caracteres estranhos (use safeId)
+  - números com clamp (atributos, mental, x/y, size)
+- Tokens:
+  - players só devem mover tokens cujo ownerUid == seu uid
+  - grupos: mover somente se tiver pelo menos 1 token do grupo com ownerUid == uid do player
+- Fog:
+  - master escreve
+  - player lê, mas o client filtra: só aplica áreas cujo affectedUids inclua uid do player (ou "all")

@@ -1,0 +1,56 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "rooms": {
+      "$roomId": {
+        ".read": "auth != null && root.child('rooms/'+$roomId+'/players/'+auth.uid+'/connected').val() === true",
+        ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid",
+        "players": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid)",
+            ".write": "auth != null && (auth.uid === $uid || root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid)"
+          }
+        },
+        "tokens": {
+          "$tokenId": {
+            ".read": "auth != null && root.child('rooms/'+$roomId+'/players/'+auth.uid+'/connected').val() === true",
+            ".write": "auth != null && (root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid || newData.child('ownerUid').val() === auth.uid || data.child('ownerUid').val() === auth.uid)"
+          }
+        },
+        "sheets": {
+          "$sheetId": {
+            ".read": "auth != null && (root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid || root.child('rooms/'+$roomId+'/tokens').hasChildren())",
+            ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid"
+          }
+        },
+        "fog": {
+          ".read": "auth != null && root.child('rooms/'+$roomId+'/players/'+auth.uid+'/connected').val() === true",
+          ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid"
+        },
+        "map": {
+          ".read": "auth != null && root.child('rooms/'+$roomId+'/players/'+auth.uid+'/connected').val() === true",
+          ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid"
+        },
+        "marks": {
+          ".read": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid",
+          ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid"
+        },
+        "tokenGroups": {
+          ".read": "auth != null && root.child('rooms/'+$roomId+'/players/'+auth.uid+'/connected').val() === true",
+          ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid"
+        },
+        "cam": {
+          ".read": "auth != null && root.child('rooms/'+$roomId+'/players/'+auth.uid+'/connected').val() === true",
+          ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid"
+        },
+        "playerCam": {
+          "$uid": {
+            ".read": "auth != null && (auth.uid === $uid || root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid)",
+            ".write": "auth != null && root.child('rooms/'+$roomId+'/masterUid').val() === auth.uid"
+          }
+        }
+      }
+    }
+  }
+}
