@@ -17,11 +17,25 @@ export async function joinRoom(roomId){
   if(!s?.displayName) throw new Error("no_display_name");
 
   // ensure room exists and determine role
-  const roomSnap = await dbGet(dbRef(pRoom(roomId)));
-  if(!roomSnap.exists()) throw new Error("room_not_found");
+  const roomRef = dbRef(pRoom(roomId));
+  const roomSnap = await dbGet(roomRef);
 
-  const room = roomSnap.val() || {};
-  const role = (room.masterUid === s.uid) ? "master" : "player";
+  // se master criando a mesa, cria o nó /rooms/{roomId}
+  if(!roomSnap.exists()) {
+    if (s.role === "master") {
+      await dbSet(roomRef, {
+        masterUid: s.uid,
+        createdAt: nowServer(),
+        roomMeta: { roomId },
+        settings: { zoom: 1, mapScale: 1, tokenScale: 1 },
+      });
+    } else {
+      throw new Error("room_not_found");
+    }
+  }
+
+  const room2 = (await dbGet(roomRef)).val() || {};
+  const role = (room2.masterUid === s.uid) ? "master" : "player";
 
   // create/update player record
   await dbSet(dbRef(pRoomPlayer(roomId, s.uid)), {

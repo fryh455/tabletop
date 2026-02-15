@@ -4,7 +4,8 @@ import { mountModal, openModal } from "./ui/modal.js";
 import { initLobby } from "./ui/lobby.js";
 import { initRoomShell } from "./ui/room_shell.js";
 import { initPanelsScaffold } from "./ui/panels/init_panels.js";
-import { loadSession } from "./core/state.js";
+import { loadSession, saveSession } from "./core/state.js";
+import { ensureAuth } from "./core/auth.js";
 import { joinRoom } from "./room/sync.js";
 import { mountMapCanvas } from "./ui/canvas/map_canvas.js";
 import { on } from "./core/events.js";
@@ -46,6 +47,11 @@ async function initRoom() {
 
   try {
     toast("info", "Conectando…", 1200);
+
+    // garante auth + uid em sessão
+    const u = await ensureAuth(s.displayName);
+    if (u?.uid && !s.uid) saveSession({ uid: u.uid, displayName: s.displayName });
+
     ctx = await joinRoom(roomId);
     toast("ok", "Conectado.", 1200);
 

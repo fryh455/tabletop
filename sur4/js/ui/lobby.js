@@ -2,6 +2,7 @@
 import { validateDisplayName, validateRoomCode } from "../core/validate.js";
 import { loadSession, saveSession, clearSession } from "../core/state.js";
 import { baseUrl } from "../core/env.js";
+import { ensureAuth } from "../core/auth.js";
 import { toast } from "./toast.js";
 import { openModal } from "./modal.js";
 
@@ -46,18 +47,20 @@ export function initLobby() {
     return v.value;
   }
 
-  btnCreate?.addEventListener("click", () => {
+  btnCreate?.addEventListener("click", async () => {
     const displayName = requireName();
     if (!displayName) return;
 
+    const u = await ensureAuth(displayName);
+
     const roomId = genRoomId();
-    saveSession({ displayName, roomId, role: "master" });
+    saveSession({ uid: u?.uid || null, displayName, roomId, role: "master" });
     setStatus(`Criando mesa: ${roomId}`);
     // OBS: criação real no DB virá no módulo firebase/db
     gotoRoom(roomId);
   });
 
-  btnJoin?.addEventListener("click", () => {
+  btnJoin?.addEventListener("click", async () => {
     const displayName = requireName();
     if (!displayName) return;
 
@@ -67,7 +70,7 @@ export function initLobby() {
       return;
     }
 
-    saveSession({ displayName, roomId: rc.value, role: "player" });
+    saveSession({ uid: u2?.uid || null, displayName, roomId: rc.value, role: "player" });
     setStatus(`Entrando na mesa: ${rc.value}`);
     gotoRoom(rc.value);
   });
