@@ -31,5 +31,6 @@ export function assertFirebaseConfig() {
 export function baseUrl(path = "") {
   // Mantém sempre relativo para funcionar em GitHub Pages /sur4/
   const p = String(path || "").replace(/^\/+/, "");
-  return ENV.BASE_PATH + p;
+  // Resolve relativo ao diretório atual (funciona mesmo se o projeto estiver aninhado).
+  return new URL(ENV.BASE_PATH + p, window.location.href).toString();
 }
