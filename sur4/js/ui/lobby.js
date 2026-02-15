@@ -28,10 +28,10 @@ function gotoRoom(roomId) {
 export function initLobby() {
   loadSession();
 
-  const nameInp = el("name");
-  const btnCreate = el("btnCreateRoom");
+  const nameInp = el("displayName");
+  const btnCreate = el("btnCreate");
   const roomInp = el("roomCode");
-  const btnJoin = el("btnJoinRoom");
+  const btnJoin = el("btnJoin");
 
   if (nameInp && !nameInp.value && typeof loadSession().displayName === "string") {
     nameInp.value = loadSession().displayName;
